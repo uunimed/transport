@@ -4,18 +4,54 @@
   function mapTrips(segments, now = Date.now()) {
     const trips = new Map();
     for (const segment of segments) {
+      const departure = Date.parse(segment.departure);
+      const arrival = Date.parse(segment.arrival);
       if (segment.realTime !== true || segment.cancelled ||
-          Date.parse(segment.departure) > now || Date.parse(segment.arrival) < now) continue;
+          !Number.isFinite(departure) || !Number.isFinite(arrival) ||
+          departure > now + 60_000 || arrival < now || departure > arrival) continue;
+
+      const points = decodePolyline(segment.polyline);
+      const distances = [0];
+      for (let i = 1; i < points.length; i++) {
+        const [lat, lng] = points[i];
+        const [previousLat, previousLng] = points[i - 1];
+        const longitudeScale = Math.cos((lat + previousLat) * Math.PI / 360);
+        distances.push(distances[i - 1] + Math.hypot(lat - previousLat, (lng - previousLng) * longitudeScale));
+      }
+      const leg = { departure, arrival, points, distances };
       for (const trip of segment.trips ?? []) {
         if (!trip.tripId || trip.cancelled) continue;
-        trips.set(trip.tripId, {
-          tripId: trip.tripId,
-          line: { name: trip.displayName || segment.mode, product: segment.mode },
-          direction: segment.to?.name || ''
-        });
+        if (!trips.has(trip.tripId)) {
+          trips.set(trip.tripId, {
+            tripId: trip.tripId,
+            line: { name: trip.displayName || segment.mode, product: segment.mode },
+            direction: segment.to?.name || '',
+            legs: []
+          });
+        }
+        trips.get(trip.tripId).legs.push(leg);
       }
     }
+    for (const trip of trips.values()) trip.legs.sort((a, b) => b.departure - a.departure);
     return trips;
+  }
+
+  function estimatedPosition(trip, now = Date.now()) {
+    const leg = trip.legs.find(leg => leg.departure <= now && now <= leg.arrival);
+    if (!leg?.points.length) return null;
+    const { departure, arrival, points, distances } = leg;
+    const progress = arrival > departure ? (now - departure) / (arrival - departure) : 0;
+    const target = progress * distances.at(-1);
+    if (!target) return { lat: points[0][0], lng: points[0][1] };
+
+    const end = distances.findIndex(distance => distance >= target);
+    const fraction = (target - distances[end - 1]) / (distances[end] - distances[end - 1]);
+    const [fromLat, fromLng] = points[end - 1];
+    const [toLat, toLng] = points[end];
+    return {
+      lat: fromLat + fraction * (toLat - fromLat),
+      lng: fromLng + fraction * (toLng - fromLng)
+    };
   }
 
   function departures(items) {
@@ -84,7 +120,7 @@
     return positions;
   }
 
-  const api = { mapTrips, departures, decodePolyline, vehiclePositions, MAX_POSITION_AGE_MS };
+  const api = { mapTrips, estimatedPosition, departures, decodePolyline, vehiclePositions, MAX_POSITION_AGE_MS };
   if (typeof module === 'object') module.exports = api;
   else root.LiveTransit = api;
 })(globalThis);

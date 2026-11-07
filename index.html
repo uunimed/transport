@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>გერმანიის ტრანსპორტი — Live Transit & Radar Engine</title>
+  <title>Fahrplan</title>
 
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -48,6 +48,9 @@
       font-family: 'Noto Sans Georgian', 'Inter', sans-serif;
       transition: background-color 0.25s ease, color 0.25s ease;
     }
+
+    html { color-scheme: dark; }
+    html.light { color-scheme: light; }
 
     /* Full Light Mode Theme Overrides */
     html.light body {
@@ -217,6 +220,9 @@
       transition: box-shadow 0.18s ease;
       position: relative;
     }
+    .vehicle-pill.estimated {
+      border-style: dashed;
+    }
     .vehicle-pill:hover {
       transform: translate(-50%, -50%) scale(1.14);
       z-index: 2000 !important;
@@ -283,12 +289,9 @@
           <div>
             <div class="flex items-center gap-2">
               <h1 class="text-sm sm:text-base font-extrabold tracking-tight text-white">
-                გერმანიის ტრანსპორტი
+                Fahrplan
               </h1>
-              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
-                LIVE RADAR
-              </span>
+              <span class="w-2 h-2 rounded-full bg-emerald-400 motion-safe:animate-ping" aria-hidden="true"></span>
             </div>
             <div class="flex items-center gap-1 text-[11px] text-slate-400 hidden sm:flex">
               <svg class="w-3.5 h-3.5 text-blue-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -309,7 +312,7 @@
             <input
               id="stopSearchInput"
               type="text"
-              placeholder="მოძებნე ნებისმიერი გაჩერება გერმანიაში..."
+              aria-label="გაჩერების ძიება"
               class="w-full pl-9 pr-8 py-1.5 rounded-xl bg-slate-800/90 border border-slate-700 text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-blue-500 transition"
               autocomplete="off"
             />
@@ -433,7 +436,6 @@
               <div class="min-w-0">
                 <div class="flex items-center gap-1.5">
                   <span class="px-2 py-0.5 rounded bg-yellow-400 text-emerald-900 font-extrabold text-[11px]">H</span>
-                  <span id="selectedStopIdBadge" class="text-[11px] font-mono text-slate-400">ID: —</span>
                   <span id="lastUpdatedTime" class="text-[11px] text-emerald-400 ml-1"></span>
                 </div>
                 <h2 id="selectedStopTitle" class="text-base sm:text-lg font-extrabold text-white truncate mt-1">
@@ -569,6 +571,14 @@
         </div>
 
         <div class="settings-scroll-body p-6 space-y-6">
+          <div class="flex items-center justify-between gap-3">
+            <label for="themeSelect" class="text-sm font-bold text-slate-300">თემა</label>
+            <select id="themeSelect" onchange="setTheme(this.value)"
+              class="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200">
+              <option value="light">ღია</option>
+              <option value="dark" selected>მუქი</option>
+            </select>
+          </div>
           <div class="space-y-3 bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <label class="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-blue-400">
@@ -641,7 +651,7 @@
 
   </div>
 
-  <script src="live-transit.js"></script>
+  <script src="live-transit.js?v=2"></script>
   <script>
     /*************************************************************************
      * 1. SUPABASE CLIENT
@@ -739,7 +749,6 @@
     // Global State
     let map = null;
     let streetTileLayer = null;
-    let isLightTheme = false;
     let showStopsOnMap = true;
     let stopsLayerGroup = null;
     let vehiclesLayerGroup = null;
@@ -755,6 +764,7 @@
     let lastActiveSidebarTab = 'departures';
 
     let activeTripsCache = new Map();
+    let tripsFetchedAt = 0;
     let liveVehicleMarkers = new Map();
     let liveVehiclesState = new Map();
     let trackedTripId = null;
@@ -786,6 +796,11 @@
     window.onload = async function () {
       initClock();
       initMap();
+      try {
+        applyTheme(localStorage.getItem('de_transit_theme'));
+      } catch {
+        applyTheme('dark');
+      }
       setupSearchListener();
       setupSettingsStartupStopSearch();
       updateStartupStopSettingsUI();
@@ -937,7 +952,7 @@
     }
 
     /*************************************************************************
-     * 6. REFRESH MAP VIEW (MOTIS + HAFAS Radar Dual Fallback)
+     * 6. REFRESH MAP VIEW
      *************************************************************************/
     async function refreshMapViewData() {
       const request = ++viewportRequest;
@@ -949,7 +964,7 @@
         liveVehiclesState.clear();
         updateLiveMarkers();
         radarStatus = 'მოადიდე რუკა ლაივ რეისების სანახავად.';
-        status.textContent = radarStatus;
+        status.textContent = 'ტრანსპორტის განახლება';
         spinner.classList.remove('animate-spin');
         renderRadarVehiclesList();
         return;
@@ -980,13 +995,10 @@
 
       activeTripsCache = LiveTransit.mapTrips(Array.isArray(segments) ? segments : [], now);
       liveVehiclesState = LiveTransit.vehiclePositions(Array.isArray(positionData?.vehicles) ? positionData.vehicles : [], Date.now());
+      tripsFetchedAt = Date.now();
       updateLiveMarkers();
-      const count = activeTripsCache.size;
-      radarStatus = Array.isArray(segments)
-        ? (count ? `ლაივ რეისი: ${count}` : 'ამ არეალში ლაივ რეისი ვერ მოიძებნა.')
-        : 'ლაივ რეისების წყარო მიუწვდომელია.';
-      if (!liveVehicleMarkers.size) radarStatus += ' მანქანების პოზიციები მიუწვდომელია.';
-      status.textContent = radarStatus;
+      radarStatus = Array.isArray(segments) ? '' : 'ლაივ რეისების წყარო მიუწვდომელია.';
+      status.textContent = 'ტრანსპორტის განახლება';
       spinner.classList.remove('animate-spin');
       renderRadarVehiclesList();
     }
@@ -1061,7 +1073,6 @@
       switchSidebarTab('departures');
 
       document.getElementById('selectedStopTitle').textContent = stop.name;
-      document.getElementById('selectedStopIdBadge').textContent = `ID: ${stop.id}`;
       updateFavoriteButtonUI();
 
       await refreshSelectedStopDepartures(false);
@@ -1080,6 +1091,7 @@
       if (request !== departuresRequest) return;
       currentDepartures = LiveTransit.departures(Array.isArray(data?.stopTimes) ? data.stopTimes : []);
       stopAlerts = data?.place?.alerts ?? [];
+      updateLiveMarkers();
       departuresStatus = Array.isArray(data?.stopTimes)
         ? 'ამ გაჩერებაზე ლაივ გასვლის ინფორმაცია არ მოიძებნა.'
         : 'გაჩერების ლაივ მონაცემები მიუწვდომელია.';
@@ -1116,7 +1128,7 @@
     }
 
     /*************************************************************************
-     * 8. MEASURED VEHICLE POSITIONS
+     * 8. VEHICLE POSITIONS
      *************************************************************************/
     function updateLiveMarkers() {
       const now = Date.now();
@@ -1125,22 +1137,30 @@
       }
       const visible = new Set();
       const bounds = map.getBounds();
-      for (const [id, position] of liveVehiclesState) {
-        const trip = activeTripsCache.get(id);
-        if (!trip || (trackedTripId === id && trackedLeg?.cancelled) ||
-            !bounds.contains([position.lat, position.lng])) continue;
+      const cancelledDepartures = new Set(currentDepartures.filter(dep => dep.cancelled).map(dep => dep.tripId));
+      for (const [id, trip] of activeTripsCache) {
+        if (now - tripsFetchedAt > LiveTransit.MAX_POSITION_AGE_MS || cancelledDepartures.has(id) ||
+            (trackedTripId === id && trackedLeg?.cancelled)) continue;
+        const measured = liveVehiclesState.get(id);
+        const position = measured ?? LiveTransit.estimatedPosition(trip, now);
+        if (!position || !bounds.contains([position.lat, position.lng])) continue;
         const style = getLineStyle(trip.line.name, trip.line.product);
         if (!enabledTransportTypes.has(style.category)) continue;
         visible.add(id);
-        if (liveVehicleMarkers.has(id)) {
-          liveVehicleMarkers.get(id).setLatLng([position.lat, position.lng]);
+        const existing = liveVehicleMarkers.get(id);
+        const kind = measured ? 'მოწოდებული მდებარეობა' : 'მიახლოებითი მდებარეობა';
+        if (existing?.kind === kind) {
+          existing.setLatLng([position.lat, position.lng]);
           continue;
         }
+        if (existing) vehiclesLayerGroup.removeLayer(existing);
         const icon = L.divIcon({
           className: 'vehicle-marker-container', iconSize: [0, 0],
-          html: `<div class="vehicle-pill" style="background-color:${style.bg}">${style.svg} ${escapeHTML(style.formattedLabel)}</div>`
+          html: `<div class="vehicle-pill ${measured ? '' : 'estimated'}" style="background-color:${style.bg}">${style.svg} ${escapeHTML(style.formattedLabel)}</div>`
         });
-        const marker = L.marker([position.lat, position.lng], { icon }).addTo(vehiclesLayerGroup);
+        const marker = L.marker([position.lat, position.lng], { icon, title: kind }).addTo(vehiclesLayerGroup);
+        marker.kind = kind;
+        marker.bindTooltip(kind);
         marker.on('click', () => openVehicleInSidebar(tripClick(id)));
         liveVehicleMarkers.set(id, marker);
       }
@@ -1151,7 +1171,7 @@
       }
       if (trackedTripId && trackedLeg && !trackedLeg.cancelled) {
         document.getElementById('trackCurrentSegment').textContent = liveVehicleMarkers.has(trackedTripId)
-          ? 'მდებარეობა განახლებულია' : 'მანქანის მდებარეობა მიუწვდომელია';
+          ? liveVehicleMarkers.get(trackedTripId).kind : '—';
       }
     }
 
@@ -1190,7 +1210,7 @@
       document.getElementById('trackLineBadge').textContent = leg.displayName || leg.mode;
       document.getElementById('trackDirectionTitle').textContent = leg.headsign || leg.to?.name || 'მარშრუტი';
       document.getElementById('trackCurrentSegment').textContent = leg.cancelled
-        ? 'რეისი გაუქმებულია' : 'მანქანის მდებარეობა მიუწვდომელია';
+        ? 'რეისი გაუქმებულია' : (liveVehicleMarkers.get(id)?.kind ?? '—');
       if (leg.cancelled) {
         activeTripsCache.delete(id);
         liveVehiclesState.delete(id);
@@ -1259,11 +1279,13 @@
     }
 
     function renderRadarVehiclesList() {
+      const now = Date.now();
       const entries = [...activeTripsCache.values()].filter(entry =>
+        entry.legs.some(leg => leg.departure <= now && now <= leg.arrival) &&
         enabledTransportTypes.has(getLineStyle(entry.line.name, entry.line.product).category));
       document.getElementById('radarTabBadge').textContent = entries.length;
       document.getElementById('radarVehiclesList').innerHTML =
-        `<p class="p-2 text-xs text-slate-400">${radarStatus}</p>` + entries.map(entry => {
+        (radarStatus ? `<p class="p-2 text-xs text-slate-400">${radarStatus}</p>` : '') + entries.map(entry => {
           const style = getLineStyle(entry.line.name, entry.line.product);
           return `<button type="button" onclick="openVehicleInSidebar('${tripClick(entry.tripId)}')"
             class="block w-full text-left p-3 rounded-xl bg-slate-950/80 hover:bg-slate-800 border border-slate-800">
@@ -1300,7 +1322,6 @@
             return `
               <div onclick="selectSearchedStop('${encodeURIComponent(JSON.stringify(stopObj))}')" class="px-3.5 py-2.5 hover:bg-slate-800 cursor-pointer border-b border-slate-800 flex items-center justify-between">
                 <span class="text-xs font-bold text-white">${stopObj.name}</span>
-                <span class="text-[10px] text-slate-400">ID: ${stopObj.id}</span>
               </div>
             `;
           }).join('');
@@ -1368,6 +1389,23 @@
     /*************************************************************************
      * 12. SETTINGS & UTILS
      *************************************************************************/
+    function applyTheme(theme) {
+      const light = theme === 'light';
+      document.documentElement.classList.toggle('light', light);
+      document.documentElement.classList.toggle('dark', !light);
+      document.getElementById('map').classList.toggle('map-tiles-dark', !light);
+      document.getElementById('themeSelect').value = light ? 'light' : 'dark';
+    }
+
+    function setTheme(theme) {
+      applyTheme(theme);
+      try {
+        localStorage.setItem('de_transit_theme', theme);
+      } catch {
+        // The theme still applies for this visit.
+      }
+    }
+
     function openSettingsModal() { document.getElementById('settingsModal').classList.remove('hidden'); }
     function closeSettingsModal() { document.getElementById('settingsModal').classList.add('hidden'); }
 

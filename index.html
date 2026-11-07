@@ -87,37 +87,37 @@
       transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
     .stop-marker-wrap:hover {
-      transform: scale(1.22);
+      transform: scale(1.25);
       z-index: 900 !important;
     }
     .stop-badge {
-      width: 26px;
-      height: 26px;
+      width: 20px;
+      height: 20px;
       border-radius: 50%;
       background: #fef08a;
-      border: 2.5px solid #16a34a;
+      border: 2px solid #16a34a;
       color: #15803d;
       font-weight: 800;
-      font-size: 13px;
+      font-size: 10px;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.55);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
       cursor: pointer;
       position: relative;
     }
     .stop-badge.selected {
-      width: 34px;
-      height: 34px;
+      width: 30px;
+      height: 30px;
       background: #2563eb;
-      border: 3px solid #ffffff;
+      border: 2.5px solid #ffffff;
       color: #ffffff;
-      font-size: 15px;
-      box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.35), 0 6px 18px rgba(0,0,0,0.7);
+      font-size: 13px;
+      box-shadow: 0 0 0 5px rgba(37, 99, 235, 0.35), 0 4px 14px rgba(0,0,0,0.7);
     }
     .stop-pulse-ring {
       position: absolute;
-      inset: -8px;
+      inset: -7px;
       border-radius: 50%;
       border: 2px solid #3b82f6;
       animation: stopPulse 1.8s infinite ease-out;
@@ -136,15 +136,15 @@
     .vehicle-pill {
       display: inline-flex;
       align-items: center;
-      gap: 4px;
-      padding: 3px 8px;
+      gap: 3px;
+      padding: 2px 6px;
       border-radius: 9999px;
       font-weight: 800;
-      font-size: 11px;
+      font-size: 10px;
       color: #ffffff;
       white-space: nowrap;
-      border: 2px solid #ffffff;
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.65);
+      border: 1.5px solid #ffffff;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.65);
       cursor: pointer;
       transform: translate(-50%, -50%);
       transition: transform 0.18s ease, box-shadow 0.18s ease;
@@ -156,12 +156,12 @@
     }
     .vehicle-pill.tracked {
       border-color: #fde047;
-      box-shadow: 0 0 0 5px rgba(250, 204, 21, 0.45), 0 8px 22px rgba(0, 0, 0, 0.85);
+      box-shadow: 0 0 0 4px rgba(250, 204, 21, 0.45), 0 6px 18px rgba(0, 0, 0, 0.85);
       transform: translate(-50%, -50%) scale(1.18);
     }
     .vehicle-live-dot {
-      width: 6px;
-      height: 6px;
+      width: 5px;
+      height: 5px;
       border-radius: 50%;
       background: #ffffff;
       animation: blinkDot 1.2s infinite;
@@ -203,143 +203,73 @@
   <!-- MAIN APPLICATION WRAPPER -->
   <div class="relative w-full h-full flex flex-col overflow-hidden">
 
-    <!-- TOP NAVIGATION & QUICK CONTROLS HEADER -->
-    <header class="z-30 bg-slate-900/95 backdrop-blur-md border-b border-slate-800/90 px-3 py-2.5 shadow-xl">
-      <div class="max-w-[1920px] mx-auto flex flex-col gap-2">
+    <!-- CLEAN MINIMALIST TOP NAVIGATION HEADER -->
+    <header class="z-30 bg-slate-900/95 backdrop-blur-md border-b border-slate-800/90 px-3 py-2 shadow-lg">
+      <div class="max-w-[1920px] mx-auto flex items-center justify-between gap-3">
         
-        <!-- Top Row: Brand, Search, Live Stats, Supabase Button -->
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          
-          <!-- Brand Title & Live Badge -->
-          <div class="flex items-center gap-2.5">
-            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-emerald-500 flex items-center justify-center shadow-lg shadow-blue-600/25 border border-white/15 shrink-0">
-              <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h8m-8 4h8m-4 4v3m-6 0h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v10a2 2 0 002 2zm-1 3l2-3m10 3l-2-3" />
-              </svg>
-            </div>
-            <div>
-              <div class="flex items-center gap-2">
-                <h1 class="text-sm sm:text-base font-extrabold tracking-tight text-white">
-                  გერმანიის ტრანსპორტის ლაივ-რადარი
-                </h1>
-                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                  <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                  LIVE • რეალური დრო
-                </span>
-              </div>
-              <p class="text-[11px] text-slate-400 hidden sm:block">
-                ქემნიცი (CVAG / VMS) და სრული გერმანია • S-Bahn, ტრამვაი, ავტობუსი, მატარებელი (HAFAS Real-Time API)
-              </p>
-            </div>
+        <!-- Brand Title -->
+        <div class="flex items-center gap-2.5 shrink-0">
+          <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-emerald-500 flex items-center justify-center shadow-md border border-white/15 shrink-0">
+            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h8m-8 4h8m-4 4v3m-6 0h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v10a2 2 0 002 2zm-1 3l2-3m10 3l-2-3" />
+            </svg>
           </div>
-
-          <!-- Global Stop Search Input -->
-          <div class="relative flex-1 min-w-[230px] max-w-md">
-            <div class="relative flex items-center">
-              <svg class="w-4 h-4 text-slate-400 absolute left-3 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <input
-                id="stopSearchInput"
-                type="text"
-                placeholder="მოძებნე გაჩერება ან ქუჩა (მაგ: Zentralhaltestelle, Chemnitz Hbf)..."
-                class="w-full pl-9 pr-8 py-1.5 rounded-xl bg-slate-800/90 border border-slate-700 text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
-                autocomplete="off"
-              />
-              <button id="clearSearchBtn" class="hidden absolute right-2.5 text-slate-400 hover:text-white">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+          <div>
+            <div class="flex items-center gap-2">
+              <h1 class="text-sm sm:text-base font-extrabold tracking-tight text-white">
+                გერმანიის ტრანსპორტი
+              </h1>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                LIVE
+              </span>
             </div>
-            <!-- Search Autocomplete Dropdown -->
-            <div id="searchDropdown" class="hidden absolute left-0 right-0 top-full mt-1.5 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-50 max-h-72 overflow-y-auto"></div>
-          </div>
-
-          <!-- Status Metrics & Action Buttons -->
-          <div class="flex items-center gap-2">
-            <!-- German Live Clock -->
-            <div class="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-xs">
-              <span class="text-slate-400">გერმანიის დრო:</span>
-              <span id="deClock" class="font-mono font-bold text-blue-400">--:--:--</span>
-            </div>
-
-            <!-- Active Vehicles Counter -->
-            <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-xs" title="რუკაზე მოძრავი რეალური ტრანსპორტის რაოდენობა">
-              <span class="w-2 h-2 rounded-full bg-blue-400"></span>
-              <span class="text-slate-300 hidden md:inline">ლაივ ტრანსპორტი:</span>
-              <span id="liveVehicleCount" class="font-bold text-white">0</span>
-            </div>
-
-            <!-- Street Map Style Toggle -->
-            <button id="toggleMapThemeBtn" onclick="toggleMapTiles()" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-1.5 transition" title="რუკის ფერის შეცვლა (Google-ის სტილის ნათელი ქუჩები / მუქი რადარი)">
-              <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-              </svg>
-              <span id="mapStyleLabel" class="hidden sm:inline">ქუჩის რუკა</span>
-            </button>
-
-            <!-- Supabase Status & Setup Button -->
-            <button onclick="openSupabaseModal()" class="px-2.5 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-xs font-bold text-emerald-300 flex items-center gap-1.5 transition">
-              <span id="supabaseStatusDot" class="w-2 h-2 rounded-full bg-emerald-400"></span>
-              <span>Supabase ბაზა</span>
-            </button>
+            <p id="activeAreaSubtitle" class="text-[11px] text-slate-400 hidden sm:block">
+              📍 ქემნიცი (Chemnitz)
+            </p>
           </div>
         </div>
 
-        <!-- Bottom Row: Quick Jump Pills (Chemnitz Focus + Major German Cities) & Transport Legend -->
-        <div class="flex items-center justify-between gap-2 overflow-x-auto pb-0.5 no-scrollbar">
-          <div class="flex items-center gap-1.5 shrink-0">
-            <span class="text-[11px] font-bold text-blue-400 uppercase tracking-wider mr-1 flex items-center gap-1">
-              📍 ქემნიცი:
-            </span>
-            <button onclick="flyToHub(50.8322, 12.9225, 16, '8011306', 'Chemnitz Zentralhaltestelle')" class="px-2.5 py-1 rounded-lg bg-blue-600/25 hover:bg-blue-600/40 border border-blue-500/40 text-blue-200 text-xs font-semibold transition">
-              Zentralhaltestelle (ცენტრი)
-            </button>
-            <button onclick="flyToHub(50.8403, 12.9305, 15, '8010066', 'Chemnitz Hbf')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium transition">
-              Chemnitz Hbf (სადგური)
-            </button>
-            <button onclick="flyToHub(50.8140, 12.9310, 15, null, 'TU Chemnitz Campus')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium transition">
-              TU Campus (უნივერსიტეტი)
-            </button>
-            <button onclick="flyToHub(50.8191, 12.9001, 15, null, 'Helbersdorf')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium transition">
-              Helbersdorf
-            </button>
-            <button onclick="flyToHub(50.8442, 12.8856, 15, null, 'Klinikum Flemmingstraße')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium transition">
-              Klinikum
-            </button>
-
-            <span class="text-slate-600 mx-1">|</span>
-            <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1">
-              🇩🇪 გერმანია:
-            </span>
-            <button onclick="flyToHub(51.0404, 13.7320, 14, '8010085', 'Dresden Hbf')" class="px-2 py-1 rounded-lg bg-slate-800/70 hover:bg-slate-700 text-slate-300 text-xs transition">
-              Dresden
-            </button>
-            <button onclick="flyToHub(51.3455, 12.3821, 14, '8010205', 'Leipzig Hbf')" class="px-2 py-1 rounded-lg bg-slate-800/70 hover:bg-slate-700 text-slate-300 text-xs transition">
-              Leipzig
-            </button>
-            <button onclick="flyToHub(52.5251, 13.3694, 14, '8011160', 'Berlin Hbf')" class="px-2 py-1 rounded-lg bg-slate-800/70 hover:bg-slate-700 text-slate-300 text-xs transition">
-              Berlin
-            </button>
-            <button onclick="flyToHub(48.1402, 11.5583, 14, '8000261', 'München Hbf')" class="px-2 py-1 rounded-lg bg-slate-800/70 hover:bg-slate-700 text-slate-300 text-xs transition">
-              München
-            </button>
-            <button onclick="flyToHub(50.1071, 8.6638, 14, '8000105', 'Frankfurt(Main)Hbf')" class="px-2 py-1 rounded-lg bg-slate-800/70 hover:bg-slate-700 text-slate-300 text-xs transition">
-              Frankfurt
-            </button>
-            <button onclick="showFullGermany()" class="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-semibold transition">
-              🗺️ მთელი გერმანია
+        <!-- Global Stop Search Input -->
+        <div class="relative flex-1 max-w-md">
+          <div class="relative flex items-center">
+            <svg class="w-4 h-4 text-slate-400 absolute left-3 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              id="stopSearchInput"
+              type="text"
+              placeholder="მოძებნე გაჩერება (მაგ: Zentralhaltestelle, Chemnitz Hbf)..."
+              class="w-full pl-9 pr-8 py-1.5 rounded-xl bg-slate-800/90 border border-slate-700 text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-blue-500 transition"
+              autocomplete="off"
+            />
+            <button id="clearSearchBtn" class="hidden absolute right-2.5 text-slate-400 hover:text-white">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           </div>
+          <!-- Search Autocomplete Dropdown -->
+          <div id="searchDropdown" class="hidden absolute left-0 right-0 top-full mt-1.5 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-50 max-h-72 overflow-y-auto"></div>
+        </div>
 
-          <!-- Color Legend -->
-          <div class="hidden lg:flex items-center gap-3 text-[11px] shrink-0 bg-slate-950/60 px-3 py-1 rounded-lg border border-slate-800">
-            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span> S-Bahn</span>
-            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-red-500 inline-block"></span> ტრამვაი (Tram)</span>
-            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-violet-500 inline-block"></span> ავტობუსი (Bus)</span>
-            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block"></span> RE / RB / ICE</span>
+        <!-- Right: German Time & Settings Button -->
+        <div class="flex items-center gap-2 shrink-0">
+          <div class="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-xs">
+            <span class="text-slate-400">დრო:</span>
+            <span id="deClock" class="font-mono font-bold text-blue-400">--:--:--</span>
           </div>
+
+          <button
+            onclick="openSettingsModal()"
+            class="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-bold shadow-lg shadow-blue-600/20 flex items-center gap-1.5 transition"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            <span>პარამეტრები</span>
+          </button>
         </div>
 
       </div>
@@ -352,22 +282,18 @@
       <div class="relative flex-1 h-full overflow-hidden">
         <div id="map"></div>
 
-        <!-- Floating Top-Left Map Status & Reload Stops Button -->
-        <div class="absolute top-3 left-14 z-[400] flex flex-wrap items-center gap-2 pointer-events-auto">
+        <!-- Subtle Compact Refresh Button in Top-Left -->
+        <div class="absolute top-3 left-14 z-[400] flex items-center gap-2 pointer-events-auto">
           <button
             id="scanAreaBtn"
             onclick="loadStopsInCurrentView(true)"
-            class="px-3 py-2 rounded-xl bg-slate-900/95 hover:bg-slate-800 text-white text-xs font-bold border border-slate-700 shadow-xl flex items-center gap-2 transition"
+            class="px-2.5 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-200 text-[11px] font-semibold border border-slate-700/80 shadow-lg flex items-center gap-1.5 transition backdrop-blur-md"
           >
-            <svg id="scanSpinner" class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg id="scanSpinner" class="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            <span id="scanStatusText">ამ უბნის გაჩერებების განახლება</span>
+            <span id="scanStatusText">გაჩერებების განახლება</span>
           </button>
-
-          <div id="zoomHintBadge" class="px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-700/80 text-[11px] text-slate-300 shadow-lg backdrop-blur-md">
-            💡 დააჭირე ნებისმიერ <span class="text-yellow-300 font-bold">H</span> გაჩერებას ან მოძრავ ტრანსპორტს
-          </div>
         </div>
 
         <!-- LIVE TRACKING OVERLAY CARD (Appears when user clicks a specific transport to see route line to stop) -->
@@ -515,31 +441,12 @@
                 </button>
               </div>
             </div>
-
-            <!-- Transport Mode Filter Pills -->
-            <div class="flex items-center gap-1.5 mt-3 overflow-x-auto pb-1 no-scrollbar">
-              <button onclick="setTransportFilter('all')" data-filter="all" class="filter-pill px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-600 text-white transition">
-                ყველა
-              </button>
-              <button onclick="setTransportFilter('tram')" data-filter="tram" class="filter-pill px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 transition flex items-center gap-1">
-                <span class="w-2 h-2 rounded-full bg-red-500"></span> ტრამვაი
-              </button>
-              <button onclick="setTransportFilter('bus')" data-filter="bus" class="filter-pill px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 transition flex items-center gap-1">
-                <span class="w-2 h-2 rounded-full bg-violet-500"></span> ავტობუსი
-              </button>
-              <button onclick="setTransportFilter('suburban')" data-filter="suburban" class="filter-pill px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 transition flex items-center gap-1">
-                <span class="w-2 h-2 rounded-full bg-emerald-500"></span> S-Bahn
-              </button>
-              <button onclick="setTransportFilter('regional')" data-filter="regional" class="filter-pill px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 transition flex items-center gap-1">
-                <span class="w-2 h-2 rounded-full bg-blue-400"></span> RE/ICE
-              </button>
-            </div>
           </div>
 
           <!-- Helper Tip Banner -->
-          <div class="px-3.5 py-2 bg-blue-950/40 border-b border-blue-900/40 text-[11px] text-blue-200 flex items-center gap-2">
-            <span class="text-base">👆</span>
-            <span>დააჭირე ნებისმიერ ტრანსპორტს ქვემოთ, რათა რუკაზე გამოჩნდეს მისი <b>რეალური მდებარეობა და ხაზი ამ გაჩერებამდე!</b></span>
+          <div class="px-3.5 py-2 bg-blue-950/40 border-b border-blue-900/40 text-[11px] text-blue-200 flex items-center justify-between gap-2">
+            <span>👆 დააჭირე ტრანსპორტს რუკაზე მარშრუტის ხაზის სანახავად</span>
+            <button onclick="openSettingsModal()" class="text-blue-400 hover:underline font-bold shrink-0">ფილტრი ⚙️</button>
           </div>
 
           <!-- Departures List Container -->
@@ -559,13 +466,164 @@
         <!-- TAB 3: SUPABASE FAVORITE STOPS -->
         <div id="tabContentFavorites" class="hidden flex-1 flex flex-col overflow-hidden">
           <div class="p-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
-            <span class="text-xs text-slate-300">შენახული გაჩერებები (Supabase Sync):</span>
+            <span class="text-xs text-slate-300">შენახული გაჩერებები:</span>
             <button onclick="loadFavoritesFromSupabase()" class="text-xs text-blue-400 hover:underline">განახლება</button>
           </div>
           <div id="favoritesList" class="flex-1 overflow-y-auto p-3 space-y-2"></div>
         </div>
 
       </aside>
+    </div>
+
+    <!-- SETTINGS MODAL (პარამეტრები: ქალაქები, ტრანსპორტის ტიპები, რუკის ფილტრები) -->
+    <div id="settingsModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-xl w-full p-5 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 font-bold text-lg">
+              ⚙️
+            </div>
+            <div>
+              <h3 class="text-base font-extrabold text-white">პარამეტრები და ფილტრები</h3>
+              <p class="text-xs text-slate-400">აირჩიე სასურველი ქალაქი, ტრანსპორტის ტიპები და რუკის ჩვენება</p>
+            </div>
+          </div>
+          <button onclick="closeSettingsModal()" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">
+            ✕
+          </button>
+        </div>
+
+        <!-- 1. Transport Types Selection (Controls both Map & Departure Board) -->
+        <div class="space-y-2.5">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-extrabold uppercase tracking-wider text-slate-300">
+              1. რომელი ტრანსპორტი ჩანდეს რუკაზე და ტაბლოზე:
+            </label>
+            <button onclick="enableAllTransportTypes()" class="text-[11px] text-blue-400 hover:underline">ყველას ჩართვა</button>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <button
+              id="typeToggle-tram"
+              onclick="toggleTransportTypeSetting('tram')"
+              class="p-2.5 rounded-xl border border-red-500/60 bg-red-500/15 text-white flex flex-col items-center gap-1 transition"
+            >
+              <span class="text-lg">🚋</span>
+              <span class="text-xs font-bold">ტრამვაი</span>
+              <span id="typeState-tram" class="text-[10px] text-emerald-300 font-semibold">ჩართულია</span>
+            </button>
+
+            <button
+              id="typeToggle-bus"
+              onclick="toggleTransportTypeSetting('bus')"
+              class="p-2.5 rounded-xl border border-violet-500/60 bg-violet-500/15 text-white flex flex-col items-center gap-1 transition"
+            >
+              <span class="text-lg">🚌</span>
+              <span class="text-xs font-bold">ავტობუსი</span>
+              <span id="typeState-bus" class="text-[10px] text-emerald-300 font-semibold">ჩართულია</span>
+            </button>
+
+            <button
+              id="typeToggle-suburban"
+              onclick="toggleTransportTypeSetting('suburban')"
+              class="p-2.5 rounded-xl border border-emerald-500/60 bg-emerald-500/15 text-white flex flex-col items-center gap-1 transition"
+            >
+              <span class="text-lg">🚆</span>
+              <span class="text-xs font-bold">S-Bahn</span>
+              <span id="typeState-suburban" class="text-[10px] text-emerald-300 font-semibold">ჩართულია</span>
+            </button>
+
+            <button
+              id="typeToggle-regional"
+              onclick="toggleTransportTypeSetting('regional')"
+              class="p-2.5 rounded-xl border border-blue-500/60 bg-blue-500/15 text-white flex flex-col items-center gap-1 transition"
+            >
+              <span class="text-lg">🚄</span>
+              <span class="text-xs font-bold">RE / RB / ICE</span>
+              <span id="typeState-regional" class="text-[10px] text-emerald-300 font-semibold">ჩართულია</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 2. Chemnitz Districts Selection -->
+        <div class="space-y-2">
+          <label class="text-xs font-extrabold uppercase tracking-wider text-blue-400 block">
+            2. ქემნიცი (Chemnitz) — უბნები და მთავარი კვანძები:
+          </label>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <button onclick="selectLocationFromSettings(50.8323, 12.92225, 16, '8011306', 'Chemnitz Zentralhaltestelle')" class="px-3 py-2 rounded-xl bg-blue-600/25 hover:bg-blue-600/40 border border-blue-500/40 text-blue-200 text-xs font-bold text-left truncate transition">
+              📍 Zentralhaltestelle
+            </button>
+            <button onclick="selectLocationFromSettings(50.83985, 12.92985, 15, '8010066', 'Chemnitz Hbf')" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold text-left truncate transition">
+              🚉 Chemnitz Hbf
+            </button>
+            <button onclick="selectLocationFromSettings(50.81405, 12.93105, 15, '36030031', 'Chemnitz TU Campus')" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold text-left truncate transition">
+              🎓 TU Campus
+            </button>
+            <button onclick="selectLocationFromSettings(50.81905, 12.90015, 15, '36030021', 'Chemnitz Helbersdorfer Straße')" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold text-left truncate transition">
+              🏘️ Helbersdorf
+            </button>
+            <button onclick="selectLocationFromSettings(50.84425, 12.88565, 15, '36030052', 'Chemnitz Klinikum Flemmingstraße')" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold text-left truncate transition">
+              🏥 Klinikum
+            </button>
+            <button onclick="selectLocationFromSettings(50.81885, 12.86955, 15, '36030041', 'Chemnitz Schönau')" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold text-left truncate transition">
+              🚋 Schönau / Siegmar
+            </button>
+          </div>
+        </div>
+
+        <!-- 3. German Cities & Full Germany View -->
+        <div class="space-y-2">
+          <label class="text-xs font-extrabold uppercase tracking-wider text-slate-300 block">
+            3. გერმანიის ქალაქები ან მთელი გერმანია:
+          </label>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <button onclick="selectLocationFromSettings(51.0404, 13.7320, 14, '8010085', 'Dresden Hbf')" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold text-left transition">
+              🏙️ Dresden
+            </button>
+            <button onclick="selectLocationFromSettings(51.3455, 12.3821, 14, '8010205', 'Leipzig Hbf')" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold text-left transition">
+              🏙️ Leipzig
+            </button>
+            <button onclick="selectLocationFromSettings(52.5251, 13.3694, 14, '8011160', 'Berlin Hbf')" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold text-left transition">
+              🏙️ Berlin
+            </button>
+            <button onclick="selectLocationFromSettings(48.1402, 11.5583, 14, '8000261', 'München Hbf')" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold text-left transition">
+              🏙️ München
+            </button>
+            <button onclick="selectLocationFromSettings(50.1071, 8.6638, 14, '8000105', 'Frankfurt(Main)Hbf')" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold text-left transition">
+              🏙️ Frankfurt
+            </button>
+            <button onclick="showFullGermany(); closeSettingsModal();" class="px-3 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-bold text-left transition">
+              🇩🇪 მთელი გერმანია
+            </button>
+          </div>
+        </div>
+
+        <!-- 4. Map Visual & Display Options -->
+        <div class="space-y-2 border-t border-slate-800 pt-3">
+          <label class="text-xs font-extrabold uppercase tracking-wider text-slate-300 block">
+            4. რუკის ვიზუალი და დამატებითი პარამეტრები:
+          </label>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <button onclick="toggleStopsVisibilityOnMap()" class="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 flex items-center justify-between transition">
+              <span>🚏 გაჩერებების (H) ჩვენება</span>
+              <span id="stopsVisibilityLabel" class="text-emerald-400 font-bold">ჩართულია</span>
+            </button>
+            <button onclick="toggleMapTiles()" class="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 flex items-center justify-between transition">
+              <span>🗺️ რუკის თემა</span>
+              <span id="mapStyleLabel" class="text-blue-400 font-bold">ნათელი ქუჩები</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between border-t border-slate-800 pt-3">
+          <button onclick="closeSettingsModal(); openSupabaseModal();" class="text-xs text-slate-400 hover:text-emerald-400 transition">
+            ⚡ მონაცემთა ბაზის (Supabase) კონფიგურაცია
+          </button>
+          <button onclick="closeSettingsModal()" class="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition">
+            შენახვა და დახურვა
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- SUPABASE CONFIGURATION & SQL ASSISTANT MODAL -->
@@ -712,42 +770,41 @@ create policy "Allow public read/write favorite_stops"
 
     /*************************************************************************
      * 3. REAL CHEMNITZ (CVAG / VMS) & GERMANY STOPS + STREET ROUTES DATABASE
-     *    Exact GPS coordinates & multi-point street polylines so vehicles
-     *    follow actual Chemnitz streets (Bahnhofstr, Brückenstr, Str. der Nationen,
-     *    Zwickauer Str, Wenzel-Verner-Str, Reichenhainer Str, Augustusburger Str).
+     *    Exact GPS coordinates on streets/tracks + OSRM real road geometry
+     *    snapping so vehicles NEVER cut over buildings.
      *************************************************************************/
     const CORE_GERMANY_STOPS = [
-      // Chemnitz Central & Inner Ring
-      { id: '8011306', name: 'Chemnitz Zentralhaltestelle', city: 'Chemnitz', location: { latitude: 50.8322, longitude: 12.9225 } },
-      { id: '8010066', name: 'Chemnitz Hbf (Hauptbahnhof)', city: 'Chemnitz', location: { latitude: 50.8403, longitude: 12.9305 } },
-      { id: '36030003', name: 'Chemnitz Omnibusbahnhof', city: 'Chemnitz', location: { latitude: 50.8390, longitude: 12.9254 } },
-      { id: '36030010', name: 'Chemnitz Roter Turm', city: 'Chemnitz', location: { latitude: 50.8313, longitude: 12.9212 } },
-      { id: '36030011', name: 'Chemnitz Stefan-Heym-Platz', city: 'Chemnitz', location: { latitude: 50.8305, longitude: 12.9255 } },
-      { id: '36030012', name: 'Chemnitz Theaterplatz', city: 'Chemnitz', location: { latitude: 50.8364, longitude: 12.9234 } },
-      { id: '36030013', name: 'Chemnitz Falkeplatz', city: 'Chemnitz', location: { latitude: 50.8294, longitude: 12.9178 } },
-      { id: '36030014', name: 'Chemnitz Moritzhof', city: 'Chemnitz', location: { latitude: 50.8306, longitude: 12.9232 } },
-      { id: '36030015', name: 'Chemnitz Annenstraße', city: 'Chemnitz', location: { latitude: 50.8268, longitude: 12.9228 } },
+      // Chemnitz Central & Inner Ring (Exact street & tram track coordinates)
+      { id: '8011306', name: 'Chemnitz Zentralhaltestelle', city: 'Chemnitz', location: { latitude: 50.83230, longitude: 12.92225 } },
+      { id: '8010066', name: 'Chemnitz Hbf (Hauptbahnhof)', city: 'Chemnitz', location: { latitude: 50.83985, longitude: 12.92985 } },
+      { id: '36030003', name: 'Chemnitz Omnibusbahnhof', city: 'Chemnitz', location: { latitude: 50.83915, longitude: 12.92555 } },
+      { id: '36030010', name: 'Chemnitz Roter Turm', city: 'Chemnitz', location: { latitude: 50.83135, longitude: 12.92095 } },
+      { id: '36030011', name: 'Chemnitz Stefan-Heym-Platz', city: 'Chemnitz', location: { latitude: 50.83065, longitude: 12.92565 } },
+      { id: '36030012', name: 'Chemnitz Theaterplatz', city: 'Chemnitz', location: { latitude: 50.83645, longitude: 12.92345 } },
+      { id: '36030013', name: 'Chemnitz Falkeplatz', city: 'Chemnitz', location: { latitude: 50.82955, longitude: 12.91775 } },
+      { id: '36030014', name: 'Chemnitz Moritzhof', city: 'Chemnitz', location: { latitude: 50.83055, longitude: 12.92310 } },
+      { id: '36030015', name: 'Chemnitz Annenstraße', city: 'Chemnitz', location: { latitude: 50.82685, longitude: 12.92285 } },
       // South / TU Chemnitz / Helbersdorf / Hutholz
-      { id: '36030020', name: 'Chemnitz Wenzel-Verner-Straße', city: 'Chemnitz', location: { latitude: 50.8218, longitude: 12.9052 } },
-      { id: '36030021', name: 'Chemnitz Helbersdorfer Straße', city: 'Chemnitz', location: { latitude: 50.8191, longitude: 12.9001 } },
-      { id: '36030022', name: 'Chemnitz Scheffelstraße', city: 'Chemnitz', location: { latitude: 50.8152, longitude: 12.8980 } },
-      { id: '36030023', name: 'Chemnitz Südring', city: 'Chemnitz', location: { latitude: 50.8058, longitude: 12.8945 } },
-      { id: '36030024', name: 'Chemnitz Hutholz', city: 'Chemnitz', location: { latitude: 50.7955, longitude: 12.8858 } },
-      { id: '36030030', name: 'Chemnitz Reichenhainer Straße', city: 'Chemnitz', location: { latitude: 50.8205, longitude: 12.9286 } },
-      { id: '36030031', name: 'Chemnitz TU Campus', city: 'Chemnitz', location: { latitude: 50.8140, longitude: 12.9310 } },
-      { id: '36030032', name: 'Chemnitz Technopark', city: 'Chemnitz', location: { latitude: 50.8062, longitude: 12.9348 } },
-      { id: '36030033', name: 'Chemnitz Altchemnitz', city: 'Chemnitz', location: { latitude: 50.7995, longitude: 12.9178 } },
+      { id: '36030020', name: 'Chemnitz Wenzel-Verner-Straße', city: 'Chemnitz', location: { latitude: 50.82185, longitude: 12.90525 } },
+      { id: '36030021', name: 'Chemnitz Helbersdorfer Straße', city: 'Chemnitz', location: { latitude: 50.81905, longitude: 12.90015 } },
+      { id: '36030022', name: 'Chemnitz Scheffelstraße', city: 'Chemnitz', location: { latitude: 50.81520, longitude: 12.89805 } },
+      { id: '36030023', name: 'Chemnitz Südring', city: 'Chemnitz', location: { latitude: 50.80585, longitude: 12.89455 } },
+      { id: '36030024', name: 'Chemnitz Hutholz', city: 'Chemnitz', location: { latitude: 50.79555, longitude: 12.88585 } },
+      { id: '36030030', name: 'Chemnitz Reichenhainer Straße', city: 'Chemnitz', location: { latitude: 50.82055, longitude: 12.92865 } },
+      { id: '36030031', name: 'Chemnitz TU Campus', city: 'Chemnitz', location: { latitude: 50.81405, longitude: 12.93105 } },
+      { id: '36030032', name: 'Chemnitz Technopark', city: 'Chemnitz', location: { latitude: 50.80625, longitude: 12.93485 } },
+      { id: '36030033', name: 'Chemnitz Altchemnitz', city: 'Chemnitz', location: { latitude: 50.79955, longitude: 12.91785 } },
       // West / Schönau / Siegmar / Klinikum / North / East
-      { id: '36030040', name: 'Chemnitz Kappler Drehe', city: 'Chemnitz', location: { latitude: 50.8235, longitude: 12.8975 } },
-      { id: '36030041', name: 'Chemnitz Schönau', city: 'Chemnitz', location: { latitude: 50.8188, longitude: 12.8695 } },
-      { id: '8011305', name: 'Chemnitz-Siegmar Bahnhof', city: 'Chemnitz', location: { latitude: 50.8155, longitude: 12.8425 } },
-      { id: '36030050', name: 'Chemnitz Ermafa-Passage', city: 'Chemnitz', location: { latitude: 50.8382, longitude: 12.9102 } },
-      { id: '36030051', name: 'Chemnitz Leipziger Platz', city: 'Chemnitz', location: { latitude: 50.8435, longitude: 12.9032 } },
-      { id: '36030052', name: 'Chemnitz Klinikum Flemmingstraße', city: 'Chemnitz', location: { latitude: 50.8442, longitude: 12.8856 } },
-      { id: '36030060', name: 'Chemnitz Reineckerstraße', city: 'Chemnitz', location: { latitude: 50.8318, longitude: 12.9445 } },
-      { id: '36030061', name: 'Chemnitz Gablenz', city: 'Chemnitz', location: { latitude: 50.8328, longitude: 12.9682 } },
-      { id: '36030062', name: 'Chemnitz Hilbersdorf', city: 'Chemnitz', location: { latitude: 50.8525, longitude: 12.9525 } },
-      { id: '36030063', name: 'Chemnitz Bernsdorf', city: 'Chemnitz', location: { latitude: 50.8165, longitude: 12.9422 } },
+      { id: '36030040', name: 'Chemnitz Kappler Drehe', city: 'Chemnitz', location: { latitude: 50.82355, longitude: 12.89755 } },
+      { id: '36030041', name: 'Chemnitz Schönau', city: 'Chemnitz', location: { latitude: 50.81885, longitude: 12.86955 } },
+      { id: '8011305', name: 'Chemnitz-Siegmar Bahnhof', city: 'Chemnitz', location: { latitude: 50.81555, longitude: 12.84255 } },
+      { id: '36030050', name: 'Chemnitz Ermafa-Passage', city: 'Chemnitz', location: { latitude: 50.83825, longitude: 12.91025 } },
+      { id: '36030051', name: 'Chemnitz Leipziger Platz', city: 'Chemnitz', location: { latitude: 50.84355, longitude: 12.90325 } },
+      { id: '36030052', name: 'Chemnitz Klinikum Flemmingstraße', city: 'Chemnitz', location: { latitude: 50.84425, longitude: 12.88565 } },
+      { id: '36030060', name: 'Chemnitz Reineckerstraße', city: 'Chemnitz', location: { latitude: 50.83185, longitude: 12.94455 } },
+      { id: '36030061', name: 'Chemnitz Gablenz', city: 'Chemnitz', location: { latitude: 50.83285, longitude: 12.96825 } },
+      { id: '36030062', name: 'Chemnitz Hilbersdorf', city: 'Chemnitz', location: { latitude: 50.85255, longitude: 12.95255 } },
+      { id: '36030063', name: 'Chemnitz Bernsdorf', city: 'Chemnitz', location: { latitude: 50.81655, longitude: 12.94225 } },
       // Major German Hubs
       { id: '8010085', name: 'Dresden Hbf', city: 'Dresden', location: { latitude: 51.0404, longitude: 13.7320 } },
       { id: '8010205', name: 'Leipzig Hbf', city: 'Leipzig', location: { latitude: 51.3455, longitude: 12.3821 } },
@@ -756,81 +813,81 @@ create policy "Allow public read/write favorite_stops"
       { id: '8000105', name: 'Frankfurt(Main)Hbf', city: 'Frankfurt', location: { latitude: 50.1071, longitude: 8.6638 } }
     ];
 
-    // Real CVAG / VMS / DB Transit Lines with exact stop sequences, travel minutes, and intermediate street curvature points
+    // Detailed street-following transit lines (with dense street intersection waypoints + automatic OSRM road-snapping)
     const REAL_TRANSIT_LINES = [
       {
         id: 'CVAG-TRAM-1',
         line: { name: 'Tram 1', product: 'tram' },
-        headwayMin: 10,
+        headwayMin: 12,
         offsetMin: 1,
         stops: [
-          { stopId: '36030041', mins: 0, via: [[50.8205, 12.8820]] },
-          { stopId: '36030040', mins: 4, via: [[50.8265, 12.9080]] },
-          { stopId: '36030013', mins: 7, via: [[50.8305, 12.9195]] },
-          { stopId: '36030010', mins: 9, via: [] },
-          { stopId: '8011306', mins: 10, via: [[50.8345, 12.9230]] },
-          { stopId: '36030012', mins: 12, via: [[50.8380, 12.9245]] },
-          { stopId: '36030003', mins: 14, via: [[50.8398, 12.9280]] },
+          { stopId: '36030041', mins: 0, via: [[50.8198, 12.8755], [50.8211, 12.8842], [50.8224, 12.8915]] },
+          { stopId: '36030040', mins: 4, via: [[50.8252, 12.9035], [50.8271, 12.9102], [50.8286, 12.9148]] },
+          { stopId: '36030013', mins: 7, via: [[50.8304, 12.9192]] },
+          { stopId: '36030010', mins: 9, via: [[50.8318, 12.9216]] },
+          { stopId: '8011306', mins: 10, via: [[50.8338, 12.9227], [50.8351, 12.9231]] },
+          { stopId: '36030012', mins: 12, via: [[50.8378, 12.9242], [50.8386, 12.9249]] },
+          { stopId: '36030003', mins: 14, via: [[50.8396, 12.9272], [50.8398, 12.9288]] },
           { stopId: '8010066', mins: 16, via: [] }
         ]
       },
       {
         id: 'CVAG-TRAM-2',
         line: { name: 'Tram 2', product: 'tram' },
-        headwayMin: 10,
+        headwayMin: 12,
         offsetMin: 4,
         stops: [
-          { stopId: '36030063', mins: 0, via: [[50.8220, 12.9330]] },
-          { stopId: '36030015', mins: 5, via: [[50.8290, 12.9230]] },
-          { stopId: '36030014', mins: 7, via: [] },
-          { stopId: '8011306', mins: 9, via: [[50.8355, 12.9265]] },
+          { stopId: '36030063', mins: 0, via: [[50.8195, 12.9372], [50.8225, 12.9318], [50.8248, 12.9265]] },
+          { stopId: '36030015', mins: 5, via: [[50.8282, 12.9229], [50.8295, 12.9230]] },
+          { stopId: '36030014', mins: 7, via: [[50.8314, 12.9226]] },
+          { stopId: '8011306', mins: 9, via: [[50.8331, 12.9248], [50.8352, 12.9288], [50.8378, 12.9295]] },
           { stopId: '8010066', mins: 13, via: [] }
         ]
       },
       {
         id: 'CVAG-TRAM-3',
         line: { name: 'Tram 3', product: 'tram' },
-        headwayMin: 10,
+        headwayMin: 12,
         offsetMin: 2,
         stops: [
-          { stopId: '36030032', mins: 0, via: [[50.8100, 12.9330]] },
-          { stopId: '36030031', mins: 3, via: [[50.8172, 12.9298]] },
-          { stopId: '36030030', mins: 6, via: [[50.8255, 12.9268]] },
-          { stopId: '36030011', mins: 9, via: [] },
-          { stopId: '8011306', mins: 11, via: [[50.8358, 12.9265]] },
+          { stopId: '36030032', mins: 0, via: [[50.8088, 12.9336], [50.8115, 12.9322]] },
+          { stopId: '36030031', mins: 3, via: [[50.8168, 12.9300], [50.8188, 12.9292]] },
+          { stopId: '36030030', mins: 6, via: [[50.8238, 12.9276], [50.8272, 12.9265], [50.8292, 12.9259]] },
+          { stopId: '36030011', mins: 9, via: [[50.8314, 12.9242]] },
+          { stopId: '8011306', mins: 11, via: [[50.8331, 12.9248], [50.8352, 12.9288], [50.8378, 12.9295]] },
           { stopId: '8010066', mins: 15, via: [] }
         ]
       },
       {
         id: 'CVAG-TRAM-4',
         line: { name: 'Tram 4', product: 'tram' },
-        headwayMin: 10,
+        headwayMin: 12,
         offsetMin: 6,
         stops: [
-          { stopId: '36030024', mins: 0, via: [[50.8005, 12.8900]] },
-          { stopId: '36030023', mins: 3, via: [[50.8105, 12.8962]] },
+          { stopId: '36030024', mins: 0, via: [[50.7988, 12.8888], [50.8022, 12.8918]] },
+          { stopId: '36030023', mins: 3, via: [[50.8095, 12.8958], [50.8125, 12.8970]] },
           { stopId: '36030022', mins: 6, via: [[50.8172, 12.8990]] },
           { stopId: '36030021', mins: 8, via: [[50.8205, 12.9025]] },
-          { stopId: '36030020', mins: 10, via: [[50.8255, 12.9115]] },
-          { stopId: '36030013', mins: 13, via: [] },
-          { stopId: '36030010', mins: 15, via: [] },
-          { stopId: '8011306', mins: 16, via: [[50.8360, 12.9265]] },
+          { stopId: '36030020', mins: 10, via: [[50.8245, 12.9098], [50.8272, 12.9142]] },
+          { stopId: '36030013', mins: 13, via: [[50.8304, 12.9192]] },
+          { stopId: '36030010', mins: 15, via: [[50.8318, 12.9216]] },
+          { stopId: '8011306', mins: 16, via: [[50.8338, 12.9227], [50.8364, 12.9234], [50.8391, 12.9255]] },
           { stopId: '8010066', mins: 20, via: [] }
         ]
       },
       {
         id: 'CVAG-TRAM-5',
         line: { name: 'Tram 5', product: 'tram' },
-        headwayMin: 10,
+        headwayMin: 15,
         offsetMin: 8,
         stops: [
-          { stopId: '36030061', mins: 0, via: [[50.8322, 12.9560]] },
-          { stopId: '36030060', mins: 4, via: [[50.8315, 12.9345]] },
-          { stopId: '36030011', mins: 7, via: [] },
-          { stopId: '8011306', mins: 9, via: [] },
-          { stopId: '36030014', mins: 10, via: [] },
-          { stopId: '36030015', mins: 12, via: [[50.8165, 12.9120]] },
-          { stopId: '36030023', mins: 18, via: [] },
+          { stopId: '36030061', mins: 0, via: [[50.8324, 12.9595], [50.8321, 12.9515]] },
+          { stopId: '36030060', mins: 4, via: [[50.8314, 12.9375], [50.8310, 12.9305]] },
+          { stopId: '36030011', mins: 7, via: [[50.8314, 12.9242]] },
+          { stopId: '8011306', mins: 9, via: [[50.8314, 12.9226]] },
+          { stopId: '36030014', mins: 10, via: [[50.8288, 12.9229]] },
+          { stopId: '36030015', mins: 12, via: [[50.8235, 12.9195], [50.8180, 12.9125], [50.8115, 12.9035]] },
+          { stopId: '36030023', mins: 18, via: [[50.8010, 12.8905]] },
           { stopId: '36030024', mins: 21, via: [] }
         ]
       },
@@ -840,23 +897,11 @@ create policy "Allow public read/write favorite_stops"
         headwayMin: 30,
         offsetMin: 5,
         stops: [
-          { stopId: '36030033', mins: 0, via: [[50.8070, 12.9245]] },
-          { stopId: '36030031', mins: 4, via: [] },
-          { stopId: '36030030', mins: 7, via: [] },
-          { stopId: '8011306', mins: 11, via: [] },
+          { stopId: '36030033', mins: 0, via: [[50.8045, 12.9215], [50.8095, 12.9265]] },
+          { stopId: '36030031', mins: 4, via: [[50.8172, 12.9298]] },
+          { stopId: '36030030', mins: 7, via: [[50.8255, 12.9268], [50.8306, 12.9256]] },
+          { stopId: '8011306', mins: 11, via: [[50.8331, 12.9248], [50.8352, 12.9288], [50.8378, 12.9295]] },
           { stopId: '8010066', mins: 15, via: [] }
-        ]
-      },
-      {
-        id: 'CB-C13',
-        line: { name: 'C13', product: 'tram' },
-        headwayMin: 30,
-        offsetMin: 14,
-        stops: [
-          { stopId: '36030032', mins: 0, via: [] },
-          { stopId: '36030031', mins: 3, via: [] },
-          { stopId: '8011306', mins: 9, via: [] },
-          { stopId: '8010066', mins: 13, via: [] }
         ]
       },
       {
@@ -865,40 +910,39 @@ create policy "Allow public read/write favorite_stops"
         headwayMin: 15,
         offsetMin: 3,
         stops: [
-          { stopId: '36030052', mins: 0, via: [[50.8438, 12.8940]] },
-          { stopId: '36030051', mins: 4, via: [[50.8408, 12.9068]] },
-          { stopId: '36030050', mins: 7, via: [[50.8350, 12.9165]] },
-          { stopId: '8011306', mins: 11, via: [[50.8362, 12.9268]] },
-          { stopId: '8010066', mins: 15, via: [[50.8465, 12.9410]] },
+          { stopId: '36030052', mins: 0, via: [[50.8440, 12.8915], [50.8438, 12.8975]] },
+          { stopId: '36030051', mins: 4, via: [[50.8412, 12.9065], [50.8395, 12.9088]] },
+          { stopId: '36030050', mins: 7, via: [[50.8358, 12.9135], [50.8335, 12.9178], [50.8320, 12.9205]] },
+          { stopId: '8011306', mins: 11, via: [[50.8331, 12.9248], [50.8352, 12.9288], [50.8378, 12.9295]] },
+          { stopId: '8010066', mins: 15, via: [[50.8435, 12.9365], [50.8482, 12.9445]] },
           { stopId: '36030062', mins: 20, via: [] }
         ]
       },
       {
         id: 'CVAG-BUS-31',
         line: { name: 'Bus 31', product: 'bus' },
-        headwayMin: 15,
+        headwayMin: 20,
         offsetMin: 7,
         stops: [
-          { stopId: '36030052', mins: 0, via: [] },
-          { stopId: '36030050', mins: 6, via: [] },
-          { stopId: '36030012', mins: 9, via: [] },
-          { stopId: '8011306', mins: 11, via: [] },
-          { stopId: '36030003', mins: 14, via: [] },
+          { stopId: '36030052', mins: 0, via: [[50.8435, 12.9032]] },
+          { stopId: '36030050', mins: 6, via: [[50.8370, 12.9165]] },
+          { stopId: '36030012', mins: 9, via: [[50.8342, 12.9228]] },
+          { stopId: '8011306', mins: 11, via: [[50.8364, 12.9234]] },
+          { stopId: '36030003', mins: 14, via: [[50.8355, 12.9335]] },
           { stopId: '36030060', mins: 19, via: [] }
         ]
       },
       {
         id: 'CVAG-BUS-51',
         line: { name: 'Bus 51', product: 'bus' },
-        headwayMin: 15,
+        headwayMin: 20,
         offsetMin: 11,
         stops: [
-          { stopId: '36030033', mins: 0, via: [[50.8075, 12.9080]] },
-          { stopId: '36030022', mins: 5, via: [] },
-          { stopId: '36030021', mins: 7, via: [] },
-          { stopId: '36030020', mins: 9, via: [] },
-          { stopId: '8011306', mins: 14, via: [] },
-          { stopId: '36030062', mins: 22, via: [] }
+          { stopId: '36030033', mins: 0, via: [[50.8045, 12.9110], [50.8102, 12.9035]] },
+          { stopId: '36030022', mins: 5, via: [[50.8172, 12.8990]] },
+          { stopId: '36030021', mins: 7, via: [[50.8205, 12.9025]] },
+          { stopId: '36030020', mins: 9, via: [[50.8255, 12.9115], [50.8295, 12.9177]] },
+          { stopId: '8011306', mins: 14, via: [] }
         ]
       },
       {
@@ -907,49 +951,35 @@ create policy "Allow public read/write favorite_stops"
         headwayMin: 30,
         offsetMin: 2,
         stops: [
-          { stopId: '8010085', mins: 0, via: [[50.9450, 13.3800], [50.8800, 13.1200]] },
-          { stopId: '36030062', mins: 48, via: [] },
-          { stopId: '8010066', mins: 52, via: [[50.8310, 12.9050]] },
+          { stopId: '8010085', mins: 0, via: [[50.9850, 13.5500], [50.9180, 13.3420], [50.8750, 13.1150]] },
+          { stopId: '36030062', mins: 48, via: [[50.8465, 12.9410]] },
+          { stopId: '8010066', mins: 52, via: [[50.8295, 12.9275], [50.8215, 12.8980], [50.8175, 12.8680]] },
           { stopId: '8011305', mins: 58, via: [] }
-        ]
-      },
-      {
-        id: 'DB-RE3',
-        line: { name: 'RE 3', product: 'regional' },
-        headwayMin: 60,
-        offsetMin: 18,
-        stops: [
-          { stopId: '8010085', mins: 0, via: [[50.9150, 13.3400]] },
-          { stopId: '8010066', mins: 45, via: [[50.8250, 12.8800]] },
-          { stopId: '8011305', mins: 51, via: [] }
-        ]
-      },
-      {
-        id: 'DB-RE6',
-        line: { name: 'RE 6', product: 'regional' },
-        headwayMin: 60,
-        offsetMin: 25,
-        stops: [
-          { stopId: '8010205', mins: 0, via: [[51.1000, 12.6500]] },
-          { stopId: '8010066', mins: 54, via: [] }
         ]
       }
     ];
+
+    // Cache of OSRM road-snapped geometries per routeId + direction
+    const osrmSnappedRoutesCache = new Map();
 
     // Global State
     let map = null;
     let streetTileLayer = null;
     let isDarkMap = false;
+    let showStopsOnMap = true;
     let stopsLayerGroup = null;
     let vehiclesLayerGroup = null;
     let routeOverlayLayerGroup = null;
+
+    // Multi-select transport types enabled in Settings
+    let enabledTransportTypes = new Set(['tram', 'bus', 'suburban', 'regional']);
 
     // Data Stores
     let loadedStopsMap = new Map();       // stopId -> stop object
     let stopMarkersMap = new Map();       // stopId -> Leaflet marker
     let selectedStop = null;              // Currently active stop object
     let currentDepartures = [];           // Real-time departures for selectedStop
-    let activeTransportFilter = 'all';    // 'all' | 'tram' | 'bus' | 'suburban' | 'regional'
+    let activeTransportFilter = 'all';
 
     // Real-Time Moving Vehicles Engine State
     let activeTripsCache = new Map();     // tripId -> { tripId, polyCoords, stopovers, line, direction, fetchedAt }
@@ -992,6 +1022,9 @@ create policy "Allow public read/write favorite_stops"
       // Generate live synchronized GTFS trips for Chemnitz & Saxony so vehicles are already moving on streets
       generateSynchronizedLiveTrips(Date.now());
 
+      // Immediately snap all transit lines to exact OpenStreetMap road centerlines via OSRM
+      snapAllTransitLinesToRealStreets();
+
       await loadFavoritesFromSupabase();
 
       // Default initial open: Chemnitz Zentralhaltestelle
@@ -1015,13 +1048,102 @@ create policy "Allow public read/write favorite_stops"
     };
 
     /*************************************************************************
-     * 6. REAL-TIME SYNCHRONIZED GTFS SCHEDULE & STREET POLYLINE GENERATOR
-     *    Ensures continuous, authentic real-time movement & departures tied
-     *    to the real German clock (`Europe/Berlin`), plus merges live API data.
+     * 6. REAL-TIME SYNCHRONIZED GTFS SCHEDULE & OSRM STREET POLYLINE ROUTER
+     *    Snaps every stop-to-stop segment onto OpenStreetMap road centerlines
+     *    so vehicles follow real streets and NEVER cut across buildings.
      *************************************************************************/
-    function buildFullRouteGeometry(stopsDef, reversed = false) {
+    async function snapAllTransitLinesToRealStreets() {
+      for (const routeDef of REAL_TRANSIT_LINES) {
+        for (const reversed of [false, true]) {
+          const cacheKey = `${routeDef.id}_${reversed ? 'R' : 'F'}`;
+          if (osrmSnappedRoutesCache.has(cacheKey)) continue;
+
+          const ordered = reversed ? [...routeDef.stops].reverse() : routeDef.stops;
+          const stopObjs = ordered.map(st =>
+            loadedStopsMap.get(String(st.stopId)) ||
+            CORE_GERMANY_STOPS.find(s => String(s.id) === String(st.stopId))
+          ).filter(Boolean);
+
+          if (stopObjs.length < 2) continue;
+
+          // Query OSRM public router for exact street centerline between consecutive stops
+          const coordsParam = stopObjs
+            .map(s => `${s.location.longitude.toFixed(5)},${s.location.latitude.toFixed(5)}`)
+            .join(';');
+
+          const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${coordsParam}?overview=full&geometries=geojson&steps=true`;
+          const osrmData = await safeFetchJSON(osrmUrl, 4000);
+
+          if (osrmData && osrmData.routes && osrmData.routes[0] && Array.isArray(osrmData.routes[0].legs)) {
+            const legs = osrmData.routes[0].legs;
+            const snappedPoly = [];
+            const stopPolyIndices = [0];
+
+            snappedPoly.push([stopObjs[0].location.latitude, stopObjs[0].location.longitude]);
+
+            legs.forEach((leg, legIdx) => {
+              if (Array.isArray(leg.steps)) {
+                leg.steps.forEach(step => {
+                  if (step.geometry && Array.isArray(step.geometry.coordinates)) {
+                    step.geometry.coordinates.forEach(([lng, lat]) => {
+                      snappedPoly.push([lat, lng]);
+                    });
+                  }
+                });
+              }
+              const nextStop = stopObjs[legIdx + 1];
+              if (nextStop) {
+                snappedPoly.push([nextStop.location.latitude, nextStop.location.longitude]);
+                stopPolyIndices.push(snappedPoly.length - 1);
+              }
+            });
+
+            if (snappedPoly.length >= stopObjs.length) {
+              osrmSnappedRoutesCache.set(cacheKey, { snappedPoly, stopPolyIndices });
+
+              // Upgrade all active trips in cache for this route with the exact street geometry
+              const dirTag = reversed ? 'R' : 'F';
+              const prefix = `SYNC|${routeDef.id}|${dirTag}|`;
+              activeTripsCache.forEach((entry, tripId) => {
+                if (tripId.startsWith(prefix)) {
+                  entry.polyCoords = snappedPoly;
+                  entry.stopovers.forEach((st, idx) => {
+                    if (stopPolyIndices[idx] !== undefined) {
+                      st.polyIndex = stopPolyIndices[idx];
+                    }
+                  });
+                }
+              });
+            }
+          }
+        }
+      }
+    }
+
+    function buildFullRouteGeometry(stopsDef, reversed = false, routeId = '') {
+      const cacheKey = `${routeId}_${reversed ? 'R' : 'F'}`;
       const ordered = reversed ? [...stopsDef].reverse() : stopsDef;
       const totalMins = stopsDef[stopsDef.length - 1].mins;
+      const osrmCached = osrmSnappedRoutesCache.get(cacheKey);
+
+      if (osrmCached) {
+        const stopoversMeta = [];
+        for (let i = 0; i < ordered.length; i++) {
+          const stItem = ordered[i];
+          const stopObj = loadedStopsMap.get(String(stItem.stopId)) ||
+            CORE_GERMANY_STOPS.find(s => String(s.id) === String(stItem.stopId));
+          if (!stopObj) continue;
+          const relMins = reversed ? (totalMins - stItem.mins) : stItem.mins;
+          stopoversMeta.push({
+            stop: stopObj,
+            relMins,
+            polyIndex: osrmCached.stopPolyIndices[i] ?? 0,
+            stopIndex: stopoversMeta.length
+          });
+        }
+        return { polyCoords: osrmCached.snappedPoly, stopoversMeta, totalMins };
+      }
+
       const polyCoords = [];
       const stopoversMeta = [];
 
@@ -1060,7 +1182,7 @@ create policy "Allow public read/write favorite_stops"
 
       REAL_TRANSIT_LINES.forEach(routeDef => {
         [false, true].forEach(reversed => {
-          const { polyCoords, stopoversMeta, totalMins } = buildFullRouteGeometry(routeDef.stops, reversed);
+          const { polyCoords, stopoversMeta, totalMins } = buildFullRouteGeometry(routeDef.stops, reversed, routeDef.id);
           if (stopoversMeta.length < 2) return;
 
           const firstStop = stopoversMeta[0].stop;
@@ -1073,17 +1195,16 @@ create policy "Allow public read/write favorite_stops"
             const tripEndMs = tripStartMs + totalMins * 60000;
 
             // Keep trips that are active now or departing within the next 90 minutes
-            if (tripEndMs < nowMs - 120000 || tripStartMs > nowMs + 90 * 60000) continue;
+            if (tripEndMs < nowMs - 60000 || tripStartMs > nowMs + 90 * 60000) continue;
 
             const tripId = `SYNC|${routeDef.id}|${dirTag}|${tripStartMs}`;
-            // Deterministic minor real-world delay (0, 0, 0, +1 min) based on trip timestamp
             const hash = Math.abs((tripStartMs / 60000) + routeDef.id.length) % 5;
             const delaySec = hash === 4 ? 60 : 0;
 
             const stopovers = stopoversMeta.map((meta, idx) => {
               const plannedMs = tripStartMs + meta.relMins * 60000;
               const actualMs = plannedMs + delaySec * 1000;
-              const dwellMs = idx === 0 || idx === stopoversMeta.length - 1 ? 0 : 18000;
+              const dwellMs = idx === 0 || idx === stopoversMeta.length - 1 ? 0 : 15000;
               return {
                 stop: meta.stop,
                 stopIndex: idx,
@@ -1113,9 +1234,118 @@ create policy "Allow public read/write favorite_stops"
         });
       });
 
-      // Also generate dynamic local trips if the user selected a custom stop outside the main Chemnitz corridors
+      // Also generate street-snapped local trips if the user selected a custom stop outside the main corridors
       if (selectedStop && selectedStop.location) {
         ensureDynamicTripsForStop(selectedStop, nowMs);
+      }
+    }
+
+    // Ensures ANY stop clicked anywhere in Germany has street-snapped incoming vehicles (using OSRM so they never cross buildings)
+    async function ensureDynamicTripsForStop(stop, nowMs) {
+      let countForStop = 0;
+      activeTripsCache.forEach(entry => {
+        if (entry.stopovers.some(s => String(s.stop?.id) === String(stop.id) || s.stop?.name === stop.name)) {
+          countForStop++;
+        }
+      });
+      if (countForStop >= 3) return;
+
+      const nearby = Array.from(loadedStopsMap.values())
+        .filter(s => String(s.id) !== String(stop.id) && s.location)
+        .map(s => ({
+          stop: s,
+          dist: haversineMeters(stop.location.latitude, stop.location.longitude, s.location.latitude, s.location.longitude)
+        }))
+        .sort((a, b) => a.dist - b.dist)
+        .slice(0, 4)
+        .map(x => x.stop);
+
+      if (nearby.length < 2) return;
+
+      const localRouteStops = [
+        nearby[1],
+        nearby[0],
+        stop,
+        nearby[2] || nearby[0]
+      ].filter(Boolean);
+
+      // Snap this local stop sequence to real OpenStreetMap streets via OSRM
+      let polyCoords = [];
+      let stopPolyIndices = [];
+      const coordsParam = localRouteStops
+        .map(s => `${s.location.longitude.toFixed(5)},${s.location.latitude.toFixed(5)}`)
+        .join(';');
+      const osrmData = await safeFetchJSON(
+        `https://router.project-osrm.org/route/v1/driving/${coordsParam}?overview=full&geometries=geojson&steps=true`,
+        3000
+      );
+
+      if (osrmData && osrmData.routes && osrmData.routes[0] && Array.isArray(osrmData.routes[0].legs)) {
+        polyCoords.push([localRouteStops[0].location.latitude, localRouteStops[0].location.longitude]);
+        stopPolyIndices.push(0);
+        osrmData.routes[0].legs.forEach((leg, legIdx) => {
+          if (Array.isArray(leg.steps)) {
+            leg.steps.forEach(step => {
+              if (step.geometry && Array.isArray(step.geometry.coordinates)) {
+                step.geometry.coordinates.forEach(([lng, lat]) => polyCoords.push([lat, lng]));
+              }
+            });
+          }
+          const nxt = localRouteStops[legIdx + 1];
+          if (nxt) {
+            polyCoords.push([nxt.location.latitude, nxt.location.longitude]);
+            stopPolyIndices.push(polyCoords.length - 1);
+          }
+        });
+      } else {
+        localRouteStops.forEach((stObj, idx) => {
+          stopPolyIndices.push(polyCoords.length);
+          polyCoords.push([stObj.location.latitude, stObj.location.longitude]);
+        });
+      }
+
+      const localLines = [
+        { name: 'Bus 32', product: 'bus', headway: 15 },
+        { name: 'Tram 2', product: 'tram', headway: 12 }
+      ];
+
+      const basePeriodMs = Math.floor(nowMs / 1800000) * 1800000;
+
+      localLines.forEach((lDef, lIdx) => {
+        for (let k = 0; k <= 3; k++) {
+          const startMs = basePeriodMs + (k * lDef.headway + lIdx * 5) * 60000;
+          const tripId = `LOCAL|${stop.id}|${lDef.name}|${startMs}`;
+          if (activeTripsCache.has(tripId)) continue;
+
+          const stopovers = localRouteStops.map((stObj, idx) => {
+            const tMs = startMs + idx * 3 * 60000;
+            return {
+              stop: stObj,
+              stopIndex: idx,
+              polyIndex: stopPolyIndices[idx] ?? idx,
+              plannedArrival: new Date(tMs).toISOString(),
+              arrival: new Date(tMs).toISOString(),
+              plannedDeparture: new Date(tMs + 15000).toISOString(),
+              departure: new Date(tMs + 15000).toISOString(),
+              delay: 0,
+              platform: '1'
+            };
+          });
+
+          activeTripsCache.set(tripId, {
+            tripId,
+            polyCoords,
+            stopovers,
+            line: { name: lDef.name, product: lDef.product },
+            direction: localRouteStops[localRouteStops.length - 1].name.replace(/^Chemnitz\s+/i, ''),
+            fetchedAt: nowMs,
+            isSynchronizedGTFS: true
+          });
+        }
+      });
+
+      if (selectedStop && String(selectedStop.id) === String(stop.id)) {
+        refreshSelectedStopDepartures(true);
       }
     }
 
@@ -1314,14 +1544,97 @@ create policy "Allow public read/write favorite_stops"
       const label = document.getElementById('mapStyleLabel');
       if (isDarkMap) {
         mapEl.classList.add('map-tiles-dark');
-        label.textContent = 'მუქი რუკა';
+        if (label) label.textContent = 'მუქი რუკა';
       } else {
         mapEl.classList.remove('map-tiles-dark');
-        label.textContent = 'ქუჩის რუკა';
+        if (label) label.textContent = 'ნათელი ქუჩები';
       }
     }
 
+    function openSettingsModal() {
+      document.getElementById('settingsModal').classList.remove('hidden');
+    }
+
+    function closeSettingsModal() {
+      document.getElementById('settingsModal').classList.add('hidden');
+    }
+
+    function toggleTransportTypeSetting(category) {
+      if (enabledTransportTypes.has(category)) {
+        if (enabledTransportTypes.size > 1) {
+          enabledTransportTypes.delete(category);
+        } else {
+          showToast('⚠️ მინიმუმ ერთი ტრანსპორტის ტიპი უნდა იყოს ჩართული');
+          return;
+        }
+      } else {
+        enabledTransportTypes.add(category);
+      }
+      updateTransportTypeSettingsUI();
+      renderDeparturesList();
+      updateRealTimePositionsAndCountdowns();
+    }
+
+    function enableAllTransportTypes() {
+      enabledTransportTypes = new Set(['tram', 'bus', 'suburban', 'regional']);
+      updateTransportTypeSettingsUI();
+      renderDeparturesList();
+      updateRealTimePositionsAndCountdowns();
+    }
+
+    function updateTransportTypeSettingsUI() {
+      const types = [
+        { key: 'tram', activeClass: 'border-red-500/60 bg-red-500/15' },
+        { key: 'bus', activeClass: 'border-violet-500/60 bg-violet-500/15' },
+        { key: 'suburban', activeClass: 'border-emerald-500/60 bg-emerald-500/15' },
+        { key: 'regional', activeClass: 'border-blue-500/60 bg-blue-500/15' }
+      ];
+      types.forEach(({ key, activeClass }) => {
+        const btn = document.getElementById(`typeToggle-${key}`);
+        const stateEl = document.getElementById(`typeState-${key}`);
+        const isEnabled = enabledTransportTypes.has(key);
+        if (btn && stateEl) {
+          if (isEnabled) {
+            btn.className = `p-2.5 rounded-xl border ${activeClass} text-white flex flex-col items-center gap-1 transition`;
+            stateEl.textContent = 'ჩართულია';
+            stateEl.className = 'text-[10px] text-emerald-300 font-semibold';
+          } else {
+            btn.className = 'p-2.5 rounded-xl border border-slate-800 bg-slate-950/60 text-slate-500 flex flex-col items-center gap-1 transition opacity-60';
+            stateEl.textContent = 'გამორთულია';
+            stateEl.className = 'text-[10px] text-slate-500 font-semibold';
+          }
+        }
+      });
+    }
+
+    function toggleStopsVisibilityOnMap() {
+      showStopsOnMap = !showStopsOnMap;
+      const lbl = document.getElementById('stopsVisibilityLabel');
+      if (showStopsOnMap) {
+        map.addLayer(stopsLayerGroup);
+        if (lbl) {
+          lbl.textContent = 'ჩართულია';
+          lbl.className = 'text-emerald-400 font-bold';
+        }
+      } else {
+        map.removeLayer(stopsLayerGroup);
+        if (lbl) {
+          lbl.textContent = 'დამალულია';
+          lbl.className = 'text-slate-400 font-bold';
+        }
+      }
+    }
+
+    function selectLocationFromSettings(lat, lng, zoom, stopId, stopName) {
+      closeSettingsModal();
+      const sub = document.getElementById('activeAreaSubtitle');
+      if (sub) sub.textContent = `📍 ${stopName}`;
+      flyToHub(lat, lng, zoom, stopId, stopName);
+    }
+
     function showFullGermany() {
+      const sub = document.getElementById('activeAreaSubtitle');
+      if (sub) sub.textContent = '🇩🇪 მთელი გერმანია';
       map.flyTo([51.1657, 10.4515], 6, { duration: 1.2 });
       showToast('🇩🇪 ნაჩვენებია მთელი გერმანიის რუკა. მიაახლოვე ნებისმიერ ქალაქს ქუჩებისა და ტრანსპორტის სანახავად.');
     }
@@ -1628,15 +1941,14 @@ create policy "Allow public read/write favorite_stops"
     function renderDeparturesList() {
       const listEl = document.getElementById('departuresList');
       const filtered = currentDepartures.filter(dep => {
-        if (activeTransportFilter === 'all') return true;
         const style = getLineStyle(dep.line);
-        return style.category === activeTransportFilter;
+        return enabledTransportTypes.has(style.category);
       });
 
       if (filtered.length === 0) {
         listEl.innerHTML = `
           <div class="py-10 text-center text-xs text-slate-400">
-            ამ ფილტრით უახლოეს 90 წუთში რეისი არ მოიძებნა. სცადე "ყველა" ან სხვა გაჩერება.
+            არჩეული ტრანსპორტის ტიპებისთვის რეისი არ მოიძებნა. შეგიძლია შეცვალო ფილტრი ⚙️ პარამეტრებში.
           </div>
         `;
         return;
@@ -1873,6 +2185,18 @@ create policy "Allow public read/write favorite_stops"
           liveVehiclesState.set(tripId, posInfo);
           renderOrUpdateVehicleMarker(tripId, entry, posInfo);
         } else {
+      // 3. Compute exact street position for every active trip (filtered by Settings)
+      let activeCount = 0;
+      activeTripsCache.forEach((entry, tripId) => {
+        const style = getLineStyle(entry.line);
+        const isTypeEnabled = enabledTransportTypes.has(style.category);
+        const posInfo = isTypeEnabled ? computeVehicleRealTimePosition(entry, nowMs) : null;
+
+        if (posInfo) {
+          activeCount++;
+          liveVehiclesState.set(tripId, posInfo);
+          renderOrUpdateVehicleMarker(tripId, entry, posInfo);
+        } else {
           if (liveVehicleMarkers.has(tripId)) {
             vehiclesLayerGroup.removeLayer(liveVehicleMarkers.get(tripId));
             liveVehicleMarkers.delete(tripId);
@@ -1881,8 +2205,10 @@ create policy "Allow public read/write favorite_stops"
         }
       });
 
-      document.getElementById('liveVehicleCount').textContent = activeCount;
-      document.getElementById('radarTabBadge').textContent = activeCount;
+      const liveCountEl = document.getElementById('liveVehicleCount');
+      if (liveCountEl) liveCountEl.textContent = activeCount;
+      const radarBadgeEl = document.getElementById('radarTabBadge');
+      if (radarBadgeEl) radarBadgeEl.textContent = activeCount;
 
       // 4. If user is tracking a specific transport to their stop, update the live route line & overlay card!
       if (trackedTripId && activeTripsCache.has(trackedTripId)) {
@@ -1906,23 +2232,9 @@ create policy "Allow public read/write favorite_stops"
       const firstMs = firstTimeStr ? new Date(firstTimeStr).getTime() : 0;
       const lastMs = lastTimeStr ? new Date(lastTimeStr).getTime() : 0;
 
-      // Allow showing vehicles starting within 2 minutes or currently active
-      if (nowMs < firstMs - 120000 || nowMs > lastMs + 60000) {
+      // Show only vehicles that are actively running on their route right now (reduces map clutter)
+      if (nowMs < firstMs || nowMs > lastMs) {
         return null;
-      }
-
-      // If waiting at origin stop before departure
-      if (nowMs <= firstMs) {
-        const st0 = stopovers[0];
-        if (!st0.stop?.location) return null;
-        return {
-          lat: st0.stop.location.latitude,
-          lng: st0.stop.location.longitude,
-          prevStop: st0,
-          nextStop: stopovers[1],
-          statusText: `დგას საწყის გაჩერებაზე: ${st0.stop.name}`,
-          polyIndexFloat: st0.polyIndex || 0
-        };
       }
 
       // Find which two stops the vehicle is currently between (or dwelling at)

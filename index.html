@@ -435,6 +435,7 @@
               <div class="min-w-0">
                 <div class="flex items-center gap-1.5">
                   <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9 7v10m6-10v10m-6-5h6"/></svg>
+                  <span id="selectedStopPlatform" class="text-[11px] font-semibold text-slate-300"></span>
                   <span id="lastUpdatedTime" class="text-[11px] text-emerald-400 ml-1"></span>
                 </div>
                 <h2 id="selectedStopTitle" class="text-base sm:text-lg font-extrabold text-white truncate mt-1">
@@ -997,7 +998,7 @@
         for (const st of stops) {
           const id = st.stopId;
           if (!id || loadedStopsMap.has(id)) continue;
-          const stop = { id, name: st.name, location: { latitude: st.lat, longitude: st.lon } };
+          const stop = { id, name: st.name, platform: st.track || st.stopCode, location: { latitude: st.lat, longitude: st.lon } };
           loadedStopsMap.set(id, stop);
           createStopMarker(stop);
         }
@@ -1030,8 +1031,9 @@
       const marker = L.marker([lat, lng], { icon });
       if (showStopsOnMap) marker.addTo(stopsLayerGroup);
 
-      marker.bindTooltip(`${stop.name}`, { direction: 'top', offset: [0, -10], className: 'custom-tooltip' });
-      marker.on('click', () => selectStop(stop, true));
+      const label = stop.platform ? `${stop.name} · ბაქანი ${stop.platform}` : stop.name;
+      marker.bindTooltip(escapeHTML(label), { direction: 'top', offset: [0, -10], className: 'custom-tooltip' });
+      marker.on('click', () => selectStop({ ...stop, platformOnly: true }, true));
 
       stopMarkersMap.set(String(stop.id), marker);
     }
@@ -1080,13 +1082,19 @@
       switchSidebarTab('departures');
 
       document.getElementById('selectedStopTitle').textContent = stop.name;
+      showSelectedPlatform(stop.platformOnly ? stop.platform : null);
       updateFavoriteButtonUI();
 
       await refreshSelectedStopDepartures(false);
     }
 
+    function showSelectedPlatform(platform) {
+      document.getElementById('selectedStopPlatform').textContent = platform ? `ბაქანი ${platform}` : '';
+    }
+
     async function refreshSelectedStopDepartures(silent = false) {
-      if (!selectedStop) return;
+      const stop = selectedStop;
+      if (!stop) return;
       const request = ++departuresRequest;
       if (!silent) {
         currentDepartures = [];
@@ -1094,9 +1102,14 @@
         departuresStatus = 'იტვირთება ლაივ გასვლები…';
         renderDeparturesList();
       }
-      const data = await safeFetchJSON(`${TRANSITOUS_BASE}/api/v5/stoptimes?stopId=${encodeURIComponent(selectedStop.id)}&n=40`);
+      const scope = stop.platformOnly ? '&radius=0&exactRadius=true' : '';
+      const data = await safeFetchJSON(`${TRANSITOUS_BASE}/api/v5/stoptimes?stopId=${encodeURIComponent(stop.id)}&n=40${scope}`);
       if (request !== departuresRequest) return;
-      currentDepartures = LiveTransit.departures(Array.isArray(data?.stopTimes) ? data.stopTimes : []);
+      const stopTimes = Array.isArray(data?.stopTimes) ? data.stopTimes : [];
+      currentDepartures = LiveTransit.departures(stop.platformOnly
+        ? stopTimes.filter(event => event.place?.stopId === stop.id)
+        : stopTimes);
+      if (stop.platformOnly) showSelectedPlatform(data?.place?.track || stop.platform);
       stopAlerts = data?.place?.alerts ?? [];
       updateLiveMarkers();
       departuresStatus = Array.isArray(data?.stopTimes)
@@ -1490,7 +1503,10 @@
         favoriteStops.splice(idx, 1);
         showToast('წაიშალა შენახულებიდან');
       } else {
-        favoriteStops.unshift({ id: selectedStop.id, name: selectedStop.name, location: selectedStop.location });
+        favoriteStops.unshift({
+          id: selectedStop.id, name: selectedStop.name, location: selectedStop.location,
+          platform: selectedStop.platform, platformOnly: selectedStop.platformOnly
+        });
         showToast('შეინახა!');
       }
       localStorage.setItem('de_transit_fav_stops', JSON.stringify(favoriteStops));

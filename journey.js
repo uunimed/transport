@@ -8,6 +8,8 @@ function initializeJourneyPlanner() {
   setupStopPicker('journeyFrom', 'journeyFromOptions', stop => changeJourneyEndpoint('from', stop));
   setupStopPicker('journeyTo', 'journeyToOptions', stop => changeJourneyEndpoint('to', stop));
   document.getElementById('journeyForm').addEventListener('submit', findJourneys);
+  document.getElementById('journeyTimeMode').addEventListener('change', updateJourneyTimePicker);
+  updateJourneyTimePicker();
   document.getElementById('journeyForm').querySelector('button[type=submit]').disabled = false;
   setInterval(() => {
     if (!journey.visible || !journey.selected || document.hidden) return;
@@ -57,15 +59,24 @@ function useJourneyOriginLocation() {
     done();
     if (request !== journey.originRequest) return;
     const { latitude, longitude } = coords;
-    input.value = 'მდებარეობა';
+    input.value = 'მიმდინარე ლოკაცია';
     document.getElementById('journeyFromOptions').classList.add('hidden');
-    changeJourneyEndpoint('from', { id: null, name: 'მდებარეობა', location: { latitude, longitude } });
+    changeJourneyEndpoint('from', { id: null, name: 'მიმდინარე ლოკაცია', location: { latitude, longitude } });
     renderUserLocation(coords);
     map.fitBounds(locationAccuracy.getBounds(), { maxZoom: 16, padding: [35, 35] });
   }, () => {
     done();
     if (request === journey.originRequest) showToast('შეამოწმე ნებართვები');
   }, { enableHighAccuracy: false, maximumAge: 15000, timeout: 12000 });
+}
+
+function updateJourneyTimePicker() {
+  const mode = document.getElementById('journeyTimeMode').value;
+  const field = document.getElementById('journeyDateTime');
+  document.getElementById('journeyTimePicker').classList.toggle('hidden', mode === 'now');
+  field.disabled = mode === 'now';
+  field.required = mode !== 'now';
+  if (!field.disabled && !field.value) field.value = LiveTransit.berlinLocal(Date.now() + 30 * 60_000);
 }
 
 async function findJourneys(event) {
@@ -81,6 +92,12 @@ async function findJourneys(event) {
     status.textContent = 'საწყისი და საბოლოო დანიშნულება არ შეიძლება იყოს ერთი მაჩვენებელი';
     return;
   }
+  const mode = document.getElementById('journeyTimeMode').value;
+  const time = mode === 'now' ? Date.now() : LiveTransit.berlinInstant(document.getElementById('journeyDateTime').value);
+  if (!Number.isFinite(time)) {
+    status.textContent = 'აირჩიე სწორი თარიღი და დრო.';
+    return;
+  }
   endJourneyTracking();
   journey.options = [];
   const request = ++journey.request;
@@ -94,7 +111,8 @@ async function findJourneys(event) {
     return Number.isFinite(latitude) && Number.isFinite(longitude) ? `${latitude},${longitude}` : stop.id;
   }
   const base = new URLSearchParams({
-    fromPlace: endpoint(from), toPlace: endpoint(to), time: new Date().toISOString()
+    fromPlace: endpoint(from), toPlace: endpoint(to), time: new Date(time).toISOString(),
+    arriveBy: String(mode === 'arrive')
   });
   const transit = new URLSearchParams(base);
   Object.entries({ transitModes: 'TRANSIT', directModes: '', searchWindow: '5400',
@@ -122,12 +140,15 @@ function mergeJourneyOptions(options) {
   const unique = new Map();
   for (const option of [...journey.options, ...options]) {
     if (!Array.isArray(option.legs) || !option.legs.length || option.legs.some(leg => leg.cancelled)) continue;
+    if (journey.query?.get('arriveBy') === 'true' && Date.parse(option.endTime) > Date.parse(journey.query.get('time'))) continue;
     const key = JSON.stringify([option.startTime, option.endTime,
       option.legs.map(leg => [leg.tripId, leg.mode, leg.from?.stopId, leg.to?.stopId])]);
     unique.set(key, option);
   }
-  journey.options = [...unique.values()].sort((a, b) =>
-    Date.parse(a.endTime) - Date.parse(b.endTime) || a.transfers - b.transfers);
+  const arriveBy = journey.query?.get('arriveBy') === 'true';
+  journey.options = [...unique.values()].sort((a, b) => (arriveBy
+    ? Date.parse(b.startTime) - Date.parse(a.startTime)
+    : Date.parse(a.endTime) - Date.parse(b.endTime)) || a.transfers - b.transfers);
 }
 
 const transferArrow = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h6a6 6 0 0 1 6 6v6m-4-4 4 4 4-4"/></svg>';
@@ -263,23 +284,27 @@ function journeyLegGeometry(leg, stops) {
     .map(stop => [stop.lat, stop.lon]);
 }
 
-function walkConnection(from, to, seconds, meters, readyAt, nextLeg, estimated = false, indexes = []) {
+const walkingConnector = '<svg class="walk-curve" viewBox="0 0 48 100" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" preserveAspectRatio="none" aria-hidden="true"><path d="M40 5C5 22 5 76 40 94m-12-3 12 3-5-12"/></svg>';
+
+function walkConnection(from, to, seconds, meters, start, readyAt, nextLeg, estimated = false, indexes = []) {
   const nextStop = nextLeg ? journeyStops(nextLeg)[0] : null;
   const departure = Date.parse(nextStop?.departure ?? nextLeg?.startTime);
-  const arrival = Date.parse(nextStop?.arrival ?? nextStop?.departure ?? nextLeg?.startTime);
-  const spare = (departure - Date.parse(readyAt)) / 1000;
+  const ready = Date.parse(readyAt);
   const wait = !nextLeg ? '' : `<p class="walk-eta" data-transfer-departure="${departure}"
-    data-transfer-arrival="${arrival}">${waitingMarkup}</p>
-    <p>გასვლა ${journeyTime(nextStop?.departure ?? nextLeg.startTime)}</p>
-    <p>${!Number.isFinite(spare) ? waitingMarkup : spare < 0
-      ? 'გადასაჯდომად დრო არ კმარა' : `ფეხით მისვლის შემდეგ გასვლამდე ${journeyMinutes(spare)}`}</p>`;
+    data-transfer-ready="${ready}">${waitingMarkup}</p>`;
   return `<div class="walk-link">
-    <strong>ფეხით</strong>
-    <div class="walk-from" ${indexes[0] === undefined ? '' : `data-journey-step="${indexes[0]}"`}>${escapeHTML(journeyPlaceName(from))}</div>
-    <div class="walk-info"><p>მანძილი · ${estimated ? 'დაახლ. ' : ''}${Number.isFinite(meters) ? Math.round(meters) + ' მ' : waitingMarkup}</p>
-    <p>დრო · ${Number.isFinite(seconds) ? journeyMinutes(seconds) : waitingMarkup}</p>${wait}</div>
-    ${transferArrow}
-    <div class="walk-to" ${indexes[1] === undefined ? '' : `data-journey-step="${indexes[1]}"`}>${escapeHTML(journeyPlaceName(to))}</div>
+    <strong class="walk-label">ფეხით</strong>
+    <div class="walk-from walk-stop" ${indexes[0] === undefined ? '' : `data-journey-step="${indexes[0]}"`}>
+      <span>${escapeHTML(journeyPlaceName(from))}</span><time>${journeyTime(start)}</time>
+    </div>
+    <div class="walk-info">
+      <p>${estimated ? 'დაახლ. ' : ''}${Number.isFinite(meters) ? Math.round(meters) + ' მეტრი' : waitingMarkup}</p>
+      <p>${Number.isFinite(seconds) ? journeyMinutes(seconds) : waitingMarkup}</p>${wait}
+    </div>
+    ${walkingConnector}
+    <div class="walk-to walk-stop" ${indexes[1] === undefined ? '' : `data-journey-step="${indexes[1]}"`}>
+      <span>${escapeHTML(journeyPlaceName(to))}</span><time>${journeyTime(readyAt)}</time>
+    </div>
   </div>`;
 }
 
@@ -331,13 +356,13 @@ function renderSelectedJourney(fit = false) {
       const ready = Date.parse(previousTransit.end) + seconds * 1000;
       transfer = `<div class="journey-transfer-card"><strong>გადაჯდომა · ${escapeHTML(journeyLine(leg))}</strong>
         ${walkConnection(origin, destination, seconds, meters,
-          Number.isFinite(ready) ? new Date(ready).toISOString() : null, leg, !sameStop)}</div>`;
+          previousTransit.end, Number.isFinite(ready) ? new Date(ready).toISOString() : null, leg, !sameStop)}</div>`;
     }
     const nextLeg = !transit ? option.legs.slice(legIndex + 1).find(item => item.tripId) : null;
     const walkMeters = !transit ? (Number.isFinite(leg.distance) ? leg.distance : geometry.slice(1).reduce(
       (sum, point, index) => sum + haversineMeters(...geometry[index], ...point), 0)) : 0;
     const walkDetails = !transit ? walkConnection(stops[0], stops.at(-1), Number(leg.duration),
-      walkMeters, end, nextLeg, false, [rows.length, rows.length + stops.length - 1]) : '';
+      walkMeters, start, end, nextLeg, false, [rows.length, rows.length + stops.length - 1]) : '';
     if (transit) {
       previousTransit = { end, stop: stops.at(-1), leg };
       walked = false;
@@ -356,10 +381,10 @@ function renderSelectedJourney(fit = false) {
       </li>`;
     }).join('');
     return `${transfer}<article class="journey-leg">
-      <div class="flex justify-between gap-2 text-xs font-bold">
+      ${transit ? `<div class="flex justify-between gap-2 text-xs font-bold">
         <span style="--line-color:${color}" class="journey-leg-label">${style?.svg ?? ''} ${transit ? escapeHTML(journeyLine(leg)) : 'ფეხით'}</span>
         <span>${journeyTimeRange(start, end)}</span>
-      </div>
+      </div>` : ''}
       ${cancelled ? '<p class="departure-chip error">მონაკვეთი გაუქმებულია ან გაჩერება გამოტოვებულია. ხელახლა მოძებნე მგზავრობა.</p>' : ''}
       ${transit && leg.headsign ? `<p class="journey-muted text-[11px]">${escapeHTML(leg.headsign)}</p>` : ''}
       ${renderAlerts(live?.alerts ?? leg.alerts)}
@@ -384,7 +409,7 @@ function renderSelectedJourney(fit = false) {
   details.innerHTML = `<div class="journey-detail-header space-y-2">
     <div class="flex justify-between gap-2">
       <button type="button" class="journey-secondary" onclick="endJourneyTracking()" aria-label="ვარიანტები">${backArrow}</button>
-      <button type="button" class="journey-secondary" onclick="showJourneyLocation()">მდებარეობა</button>
+      <button type="button" class="journey-secondary" onclick="showJourneyLocation()">მიმდინარე ლოკაცია</button>
     </div>
     <p class="text-sm font-bold">${escapeHTML(journey.from.name)} → ${escapeHTML(journey.to.name)}</p>
     <p class="text-xs journey-summary">${journeyTimeRange(
@@ -459,12 +484,13 @@ function updateJourneyProgress() {
     : recentGps ? '' : 'პროგრესი მარშრუტის დროების მიხედვით';
   for (const item of document.querySelectorAll('[data-transfer-departure]')) {
     const departure = Number(item.dataset.transferDeparture);
-    const arrival = Number(item.dataset.transferArrival);
-    item.classList.toggle('waiting-text', !Number.isFinite(departure));
-    item.textContent = !Number.isFinite(departure) ? waitingText : departure <= now ? 'რეისი გასულია' :
-      arrival < departure && arrival <= now ? 'ჩასხდომის დროა' :
-      arrival < departure ? `მოსვლამდე ${journeyMinutes((arrival - now) / 1000)}` :
-      `გასვლამდე ${journeyMinutes((departure - now) / 1000)}`;
+    const ready = Number(item.dataset.transferReady);
+    const known = Number.isFinite(departure) && Number.isFinite(ready);
+    item.classList.toggle('waiting-text', !known);
+    item.textContent = !known ? waitingText : departure <= now ? 'რეისი გასულია' :
+      ready > departure ? 'გადასაჯდომად დრო არ კმარა' :
+      `გასვლამდე: ${journeyMinutes((departure - Math.max(now, ready)) / 1000)}`;
+
   }
   if (next === -1) stopJourneyLocation();
 }

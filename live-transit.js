@@ -1,5 +1,28 @@
 (function (root) {
   const MAX_POSITION_AGE_MS = 90_000;
+  const berlinClock = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  });
+
+  function berlinLocal(time) {
+    const parts = Object.fromEntries(berlinClock.formatToParts(time).map(part => [part.type, part.value]));
+    return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+  }
+
+  function berlinInstant(local) {
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(local)) return NaN;
+    const utc = Date.parse(local + 'Z');
+    if (!Number.isFinite(utc)) return NaN;
+    return [120, 60].map(minutes => utc - minutes * 60_000)
+      .find(time => berlinLocal(time) === local) ?? NaN;
+  }
+
+  function nextBerlinDay(time) {
+    const day = berlinLocal(time).slice(0, 10);
+    const next = new Date(Date.parse(day + 'T00:00Z') + 86_400_000).toISOString().slice(0, 10);
+    return { day, next, midnight: berlinInstant(next + 'T00:00') };
+  }
 
   function pathDistances(points) {
     const distances = [0];
@@ -84,7 +107,7 @@
     };
   }
 
-  function departures(items) {
+  function departures(items, includeScheduled = false) {
     return items.flatMap(item => {
       const place = item.place ?? {};
       const cancelled = item.tripCancelled === true;
@@ -92,17 +115,21 @@
       const hasLiveTime = item.realTime === true &&
         !['NO_RT_DATA', 'INCONSISTENT_RT'].includes(place.departureTimestampReason);
       const platformChanged = place.track && place.scheduledTrack && place.track !== place.scheduledTrack;
-      if (!item.tripId || !(cancelled || skipped || hasLiveTime || platformChanged)) return [];
-      const when = hasLiveTime ? place.departure : null;
-      const delay = (Date.parse(when) - Date.parse(place.scheduledDeparture)) / 1000;
+      const planned = includeScheduled && !cancelled && !skipped &&
+        Number.isFinite(Date.parse(place.scheduledDeparture ?? place.departure));
+      if (!item.tripId || !(cancelled || skipped || hasLiveTime || platformChanged || planned)) return [];
+      const scheduledOnly = Boolean(planned && !hasLiveTime && !platformChanged);
+      const when = hasLiveTime ? place.departure : scheduledOnly ? (place.scheduledDeparture ?? place.departure) : null;
+      const delay = hasLiveTime ? (Date.parse(when) - Date.parse(place.scheduledDeparture)) / 1000 : NaN;
       return [{
         tripId: item.tripId,
         line: { name: item.displayName || item.routeShortName || item.mode, product: item.mode },
         direction: item.headsign || item.tripTo?.name || '',
         when,
         scheduledWhen: place.scheduledDeparture,
+        scheduledOnly,
         arrival: place.arrival,
-        arrivalLive: hasLiveTime(place.arrivalTimestampReason),
+        arrivalLive: !scheduledOnly && hasLiveTime(place.arrivalTimestampReason),
         stopId: place.stopId,
         delay,
         platform: place.track,
@@ -115,7 +142,7 @@
   }
 
   function departureAtStop(dep, position, now) {
-    if (dep.cancelled || dep.skipped) return false;
+    if (dep.cancelled || dep.skipped || dep.scheduledOnly) return false;
     const atPlatform = position?.from?.stopId === dep.stopId && Boolean(dep.stopId);
     const departure = Date.parse(dep.when);
     const arrival = Date.parse(dep.arrival);
@@ -295,7 +322,7 @@
     return positions;
   }
 
-  const api = { hasLiveTime, positionOnRoute, routeProgress, remainingRoute, throughService, mapTrips, estimatedPosition, departures, departureAtStop, decodePolyline, vehiclePositions, MAX_POSITION_AGE_MS };
+  const api = { berlinLocal, berlinInstant, nextBerlinDay, hasLiveTime, positionOnRoute, routeProgress, remainingRoute, throughService, mapTrips, estimatedPosition, departures, departureAtStop, decodePolyline, vehiclePositions, MAX_POSITION_AGE_MS };
   if (typeof module === 'object') module.exports = api;
   else root.LiveTransit = api;
 })(globalThis);

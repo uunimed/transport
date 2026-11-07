@@ -1,1550 +1,791 @@
+
 <!DOCTYPE html>
-<html lang="ka">
+<html lang="de">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>დოკუმენტების მართვა</title>
-    
-    <!-- PDF.js (ვიზუალური ჩვენებისთვის) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
-    <!-- pdf-lib (ორიგინალი ხარისხის შენარჩუნებით ხელმოსაწერად და შესანახად) -->
-    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-    <!-- Supabase -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chemnitz Live Transport</title>
 
-    <style>
-        :root {
-            --primary: #4f46e5; --primary-hover: #4338ca;
-            --bg-color: #f3f4f6; --panel-bg: #ffffff;
-            --text-dark: #1f2937; --text-light: #6b7280; --border: #e5e7eb;
-        }
+<link rel="stylesheet"
+href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background-color: var(--bg-color); color: var(--text-dark); height: 100vh; overflow: hidden; }
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
-        /* --- Custom Scrollbar --- */
-        ::-webkit-scrollbar {
-            width: 10px;
-            height: 10px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #e2e8f0;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #4f46e5;
-            border-radius: 5px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #4338ca;
-        }
-        /* ------------------------ */
+<style>
+* { box-sizing: border-box; }
 
-        #login-page {
-            display: flex; height: 100vh; align-items: center; justify-content: center;
-            background: url('https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=2000&auto=format&fit=crop') center/cover no-repeat;
-            position: relative;
-        }
-        #login-page::before {
-            content: ""; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(5px);
-        }
-        .login-card {
-            position: relative; background: rgba(255, 255, 255, 0.95); padding: 40px 35px;
-            border-radius: 16px; box-shadow: 0 15px 35px rgba(0,0,0,0.2); width: 100%; max-width: 440px; text-align: center; z-index: 1;
-        }
-        .login-illustration {
-            margin-bottom: 25px; display: flex; justify-content: center; width: 100%;
-        }
-        .login-illustration svg { width: 100%; max-width: 220px; height: auto; display: block; margin: 0 auto; }
-        .login-card h2 { margin-bottom: 25px; color: var(--text-dark); font-size: 24px; }
-        .input-group { margin-bottom: 20px; text-align: left; }
-        .input-group label { display: block; margin-bottom: 8px; font-size: 14px; color: var(--text-light); font-weight: 600; }
-        .login-card input { width: 100%; padding: 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 15px; }
-        .login-card input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1); }
-        .login-card button { width: 100%; padding: 14px; background: var(--primary); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.3s; margin-top: 10px; }
-        .login-card button:hover { background: var(--primary-hover); }
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f4f7fb;
+    color: #243244;
+}
 
-        #app-container { display: none; flex-direction: column; height: 100vh; width: 100vw; }
-        .topbar { background: var(--panel-bg); padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .logo-nav { display: flex; align-items: center; gap: 30px; }
-        .logo-nav h2 { display: flex; align-items: center; gap: 10px; color: var(--primary); cursor: pointer; font-size: 20px; }
-        .nav-links button { background: none; border: none; font-size: 16px; color: var(--text-light); cursor: pointer; font-weight: 600; padding: 8px 12px; border-radius: 6px; transition: 0.2s; }
-        .nav-links button:hover, .nav-links button.active { color: var(--primary); background: #eef2ff; }
-        .user-actions { display: flex; align-items: center; gap: 15px; }
-        
-        .btn { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; transition: 0.3s; text-decoration: none; justify-content: center; }
-        .btn-outline { background: white; border: 1px solid var(--border); color: var(--text-dark); }
-        .btn-outline:hover { background: var(--bg-color); }
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-primary:hover { background: var(--primary-hover); }
-        .btn-danger { background: #ef4444; color: white; }
-        .btn-danger:hover { background: #dc2626; }
+header {
+    height: 65px;
+    background: white;
+    border-bottom: 1px solid #e5eaf0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+}
 
-        .workspace-wrapper { display: flex; flex: 1; overflow: hidden; }
-        .toolbar { width: 300px; background: var(--panel-bg); border-right: 1px solid var(--border); padding: 20px; display: flex; flex-direction: column; gap: 15px; overflow-y: auto; }
-        
-        .file-upload-wrapper { position: relative; width: 100%; }
-        .file-upload-wrapper input[type=file] { position: absolute; left: 0; top: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
-        .upload-btn { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 15px; border: 2px dashed var(--border); border-radius: 8px; background: var(--bg-color); color: var(--text-light); text-align: center; font-size: 13px; font-weight: 600; }
-        .file-upload-wrapper:hover .upload-btn { border-color: var(--primary); color: var(--primary); }
+.logo {
+    font-size: 19px;
+    font-weight: bold;
+}
 
-        .doc-name-group { display: flex; flex-direction: column; gap: 5px; }
-        .doc-name-group label { font-size: 13px; font-weight: 600; color: var(--text-light); }
-        .doc-name-group input, .doc-name-group select { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; background: white; }
-        .doc-name-group input:focus, .doc-name-group select:focus { outline: none; border-color: var(--primary); }
+.status {
+    font-size: 12px;
+    color: #b7791f;
+}
 
-        .canvas-area { flex: 1; overflow: auto; padding: 30px; display: flex; flex-direction: column; align-items: center; background: #cbd5e1; position: relative; }
-        #canvas-container { display: flex; flex-direction: column; gap: 30px; width: 100%; max-width: 900px; align-items: center; }
-        
-        .empty-placeholder {
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            height: 100%; color: var(--text-light); gap: 15px; margin: auto; font-size: 18px; font-weight: 600; text-align: center;
-        }
+.container {
+    height: calc(100vh - 65px);
+    display: grid;
+    grid-template-columns: 1fr 350px;
+}
 
-        .page-wrapper { position: relative; display: inline-block; box-shadow: 0 10px 30px rgba(0,0,0,0.15); background: white; margin-bottom: 20px; }
-        canvas.pdf-page { display: block; cursor: crosshair; width: 100% !important; height: auto !important; }
+#map {
+    width: 100%;
+    height: 100%;
+}
 
-        .signature-overlay {
-            position: absolute; cursor: move; border: 2px dashed var(--primary);
-            background: rgba(79, 70, 229, 0.05); user-select: none; padding: 5px; touch-action: none;
-        }
-        .signature-overlay img { display: block; width: 100%; height: 100%; pointer-events: none; }
-        
-        .sig-delete {
-            position: absolute; top: -12px; right: -12px; background: #ef4444; color: white;
-            border: none; border-radius: 50%; width: 24px; height: 24px; font-weight: bold;
-            font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10;
-        }
-        .sig-rotate {
-            position: absolute; top: -12px; left: -12px; background: #10b981; color: white;
-            border: none; border-radius: 50%; width: 24px; height: 24px; font-weight: bold;
-            font-size: 12px; cursor: grab; display: flex; align-items: center; justify-content: center; z-index: 10;
-        }
-        .sig-resize {
-            position: absolute; bottom: -6px; right: -6px; width: 14px; height: 14px;
-            background: var(--primary); border: 2px solid white; border-radius: 50%; cursor: nwse-resize; z-index: 10;
-        }
+.sidebar {
+    background: white;
+    border-left: 1px solid #e5eaf0;
+    overflow-y: auto;
+}
 
-        #archive-view { display: none; flex: 1; padding: 30px; overflow-y: auto; background: var(--bg-color); flex-direction: column; gap: 20px; }
-        .archive-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
-        .search-box { padding: 10px 15px; border: 1px solid var(--border); border-radius: 8px; width: 300px; font-size: 14px; background: white; }
-        .search-box:focus { outline: none; border-color: var(--primary); }
+.search {
+    padding: 15px;
+    border-bottom: 1px solid #eee;
+}
 
-        .archive-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 20px; }
-        .archive-item { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: center; display: flex; flex-direction: column; gap: 10px; cursor: pointer; transition: transform 0.2s; }
-        .archive-item:hover { transform: translateY(-3px); box-shadow: 0 6px 12px rgba(0,0,0,0.1); }
-        .archive-thumb { height: 160px; background: #f8fafc; border: 1px solid var(--border); border-radius: 6px; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; }
-        .archive-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.search input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #dce3eb;
+    border-radius: 8px;
+    outline: none;
+    font-size: 14px;
+}
 
-        /* Modal Preview Popup (Wider) */
-        #preview-modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 10000; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
-        .modal-content { background: white; border-radius: 12px; width: 94vw; height: 90vh; max-width: 1700px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.3); }
-        .modal-header { padding: 15px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 18px; }
-        .modal-body { padding: 20px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; align-items: center; background: #cbd5e1; position: relative; }
-        .modal-footer { padding: 15px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
+.panel-title {
+    padding: 15px;
+    border-bottom: 1px solid #eee;
+}
 
-        /* Loading Overlay & Writing Animation */
-        #loading-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.85); z-index: 99999; align-items: center; justify-content: center; flex-direction: column; gap: 15px; }
-        .loading-animation-wrapper { width: 160px; height: 80px; display: flex; align-items: center; justify-content: center; position: relative; }
-        .writing-path {
-            stroke-dasharray: 100;
-            stroke-dashoffset: 100;
-            animation: drawWriting 1.5s ease-in-out infinite;
-        }
-        @keyframes drawWriting {
-            0% { stroke-dashoffset: 100; }
-            50% { stroke-dashoffset: 0; }
-            100% { stroke-dashoffset: -100; }
-        }
-        .loading-text { font-weight: 600; color: var(--text-dark); font-size: 16px; }
+.panel-title h2 {
+    margin: 0 0 5px;
+    font-size: 21px;
+}
 
-        #toast-container { position: fixed; top: 20px; right: 20px; z-index: 99999; display: flex; flex-direction: column; gap: 10px; }
-        .toast { min-width: 250px; padding: 15px 20px; background: white; color: var(--text-dark); border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); font-weight: 600; transform: translateX(120%); transition: transform 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55); border-left: 5px solid; display: flex; align-items: center; gap: 10px; }
-        .toast.show { transform: translateX(0); }
-        .toast.error { border-left-color: #ef4444; }
-        .toast.success { border-left-color: #10b981; }
-        .toast.info { border-left-color: var(--primary); }
-        
-        svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-    </style>
+.panel-title p {
+    margin: 0;
+    color: #8491a2;
+    font-size: 12px;
+}
+
+.stop-list {
+    padding: 0 15px;
+}
+
+.stop-item {
+    padding: 13px 5px;
+    border-bottom: 1px solid #edf0f3;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.stop-item:hover {
+    background: #f5f9fd;
+}
+
+.stop-item small {
+    display: block;
+    color: #8b98a8;
+    margin-top: 4px;
+}
+
+.departures {
+    padding: 15px;
+}
+
+.departure {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.route {
+    background: #e7f1fa;
+    color: #1769aa;
+    padding: 8px;
+    min-width: 38px;
+    text-align: center;
+    border-radius: 6px;
+    font-weight: bold;
+}
+
+.departure-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.departure-info strong {
+    display: block;
+    font-size: 12px;
+}
+
+.departure-info small {
+    color: #8995a3;
+    font-size: 10px;
+}
+
+.departure-time {
+    text-align: right;
+    font-weight: bold;
+    font-size: 13px;
+}
+
+button {
+    cursor: pointer;
+}
+
+.back {
+    border: none;
+    background: none;
+    color: #1675c5;
+    padding: 15px;
+    font-size: 13px;
+}
+
+.message {
+    padding: 15px;
+    color: #8491a2;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.loading {
+    padding: 25px;
+    text-align: center;
+    color: #64748b;
+}
+
+@media(max-width:750px) {
+    .container {
+        grid-template-columns: 1fr;
+        grid-template-rows: 48% 52%;
+    }
+
+    .sidebar {
+        border-left: none;
+        border-top: 1px solid #e5eaf0;
+    }
+
+    header {
+        height: 55px;
+    }
+
+    .container {
+        height: calc(100vh - 55px);
+    }
+}
+</style>
 </head>
+
 <body>
 
-    <div id="toast-container"></div>
+<header>
+    <div class="logo">🚊 Chemnitz Live Transport</div>
+    <div class="status" id="status">Daten werden geladen...</div>
+</header>
 
-    <div id="loading-overlay">
-        <div class="loading-animation-wrapper">
-            <svg viewBox="0 0 150 75" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 100%; height: auto;">
-                <rect x="15" y="8" width="120" height="60" rx="6" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
-                <line x1="30" y1="20" x2="120" y2="20" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
-                <line x1="30" y1="30" x2="90" y2="30" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
-                <line x1="30" y1="48" x2="120" y2="48" stroke="#4f46e5" stroke-width="2" stroke-dasharray="3 3"/>
-                <path class="writing-path" d="M35 50 C 42 38, 52 56, 62 42 C 68 35, 74 48, 84 44 C 90 41, 96 46, 102 40" stroke="#4f46e5" stroke-width="3" stroke-linecap="round" fill="none"/>
-            </svg>
-        </div>
-        <div class="loading-text" id="loading-msg">გთხოვთ მოიცადოთ...</div>
-    </div>
+<div class="container">
 
-    <!-- Modal Preview Popup -->
-    <div id="preview-modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <span id="modal-title">გადახედვა</span>
-                <button class="btn btn-outline" style="padding: 5px 10px;" onclick="closeModal()">
-                    <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                </button>
-            </div>
-            <div class="modal-body" id="modal-pdf-container">
-                <!-- პერსონალური PDF კანვასები ჩაიტვირთება აქ -->
-            </div>
-            <div class="modal-footer" id="modal-footer-actions"></div>
-        </div>
-    </div>
+    <div id="map"></div>
 
-    <!-- Login Page -->
-    <div id="login-page">
-        <div class="login-card" onkeydown="if(event.key === 'Enter') window.login();">
-            <div class="login-illustration">
-                <svg viewBox="0 0 150 75" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect x="15" y="8" width="120" height="60" rx="6" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
-                    <line x1="30" y1="20" x2="120" y2="20" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
-                    <line x1="30" y1="30" x2="90" y2="30" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
-                    <line x1="30" y1="48" x2="120" y2="48" stroke="#4f46e5" stroke-width="2" stroke-dasharray="3 3"/>
-                    <path d="M35 50 C 42 38, 52 56, 62 42 C 68 35, 74 48, 84 44 C 90 41, 96 46, 102 40" stroke="#4f46e5" stroke-width="3" stroke-linecap="round" fill="none"/>
-                </svg>
-            </div>
-            <h2>ShogiSign</h2>
-            <div class="input-group"><label>მომხმარებელი</label><input type="text" id="username" value="alex"></div>
-            <div class="input-group"><label>პაროლი</label><input type="password" id="password" value="2911"></div>
-            <button type="button" onclick="window.login()">შესვლა</button>
-        </div>
-    </div>
+    <aside class="sidebar">
 
-    <!-- App Container -->
-    <div id="app-container">
-        <header class="topbar">
-            <div class="logo-nav">
-                <h2 onclick="window.resetAppWorkspace()" style="cursor: pointer;">
-                    <svg style="color: var(--primary);" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                    ShogiSign
-                </h2>
-                <div class="nav-links">
-                    <button id="nav-workspace" class="active" onclick="window.switchView('workspace')">დოკუმენტის მართვა</button>
-                    <button id="nav-archive" onclick="window.switchView('archive')">არქივი</button>
-                </div>
-            </div>
-            <div class="user-actions">
-                <span style="font-weight: 600; color: var(--text-light);">გამარჯობა, ალექსი</span>
-                <button class="btn btn-outline" onclick="window.logout()">
-                    <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-                    გასვლა
-                </button>
-            </div>
-        </header>
-
-        <div id="workspace-view" class="workspace-wrapper">
-            <aside class="toolbar">
-                <div class="file-upload-wrapper">
-                    <div class="upload-btn">
-                        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                        <span>ატვირთვა</span>
-                    </div>
-                    <input type="file" id="docInput" accept="application/pdf">
-                </div>
-
-                <!-- Mode Switcher: Signature vs Date vs Text with SVG Icons -->
-                <div style="display: flex; gap: 5px;">
-                    <button class="btn btn-outline" id="modeSigBtn" style="flex: 1; border-color: var(--primary); color: var(--primary); font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 5px;" onclick="window.setOverlayMode('sig')">
-                        <svg viewBox="0 0 24 24" style="width: 16px; height: 16px;"><path d="M12 19l7-7 3 3-7 7-3-3z"></path><path d="M18 13l-1.5-1.5M2 2l20 20M2 22l5-5"></path></svg>
-                        
-                    </button>
-                    <button class="btn btn-outline" id="modeDateBtn" style="flex: 1; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 5px;" onclick="window.setOverlayMode('date')">
-                        <svg viewBox="0 0 24 24" style="width: 16px; height: 16px;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                        
-                    </button>
-                    <button class="btn btn-outline" id="modeTextBtn" style="flex: 1; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 5px;" onclick="window.setOverlayMode('text')">
-                        <svg viewBox="0 0 24 24" style="width: 16px; height: 16px;"><polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
-                        
-                    </button>
-                </div>
-
-                <!-- Signature Section -->
-                <div id="sigToolSection" style="display: flex; flex-direction: column; gap: 8px;">
-                    <div class="file-upload-wrapper">
-                        <div class="upload-btn">
-                            <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-                            <span id="sigBtnText">ხელმოწერა</span>
-                        </div>
-                        <input type="file" id="sigInput" accept="image/*">
-                    </div>
-                    <img id="sigPreview" style="display:none; max-width:100%; border:1px solid #ccc; border-radius:4px;">
-                </div>
-
-                <!-- Date Section -->
-                <div id="dateToolSection" style="display: none; flex-direction: column; gap: 8px;">
-                    <div class="file-upload-wrapper">
-                        <div class="upload-btn" style="background:#eef2ff; border-color:var(--primary); color:var(--primary);">
-                            <svg viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-                            <span id="digitsBtnText">ციფრების შაბლონი (1,2,3,4,5,6,7,8,9,0,.)</span>
-                        </div>
-                        <input type="file" id="digitsInput" accept="image/*">
-                    </div>
-                    <img id="digitsPreview" style="display:none; max-width:100%; border:1px solid #ccc; border-radius:4px; max-height:80px; object-fit:contain;">
-
-                    <div class="doc-name-group">
-                        <label>აირჩიეთ თარიღი</label>
-                        <input type="date" id="dateInput">
-                    </div>
-                    <button class="btn btn-primary" onclick="window.prepareCustomDateOverlay()">თარიღის გენერაცია</button>
-                    <img id="datePreview" style="display:none; max-width:100%; border:1px solid #ccc; border-radius:4px; background:white; padding:4px;">
-                </div>
-
-                <!-- Text Section (Dynamic Ink Segmentation for a-z and A-Z) -->
-                <div id="textToolSection" style="display: none; flex-direction: column; gap: 8px;">
-                    <div class="file-upload-wrapper">
-                        <div class="upload-btn" style="background:#eef2ff; border-color:var(--primary); color:var(--primary);">
-                            <svg viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-                            <span id="alphabetBtnText">ანბანის შაბლონი (a-z, A-Z)</span>
-                        </div>
-                        <input type="file" id="alphabetInput" accept="image/*">
-                    </div>
-                    <img id="alphabetPreview" style="display:none; max-width:100%; border:1px solid #ccc; border-radius:4px; max-height:80px; object-fit:contain;">
-
-                    <div class="doc-name-group">
-                        <label>ჩაწერეთ ტექსტი</label>
-                        <input type="text" id="customTextInput" placeholder="მაგ: Tiflis">
-                    </div>
-                    <button class="btn btn-primary" onclick="window.prepareCustomTextOverlay()">ტექსტის გენერაცია</button>
-                    <img id="textPreview" style="display:none; max-width:100%; border:1px solid #ccc; border-radius:4px; background:white; padding:4px;">
-                </div>
-
-                <div class="doc-name-group">
-                    <label>დოკუმენტის სახელი</label>
-                    <input type="text" id="docNameInput" value="">
-                </div>
-
-                <hr style="border: 0; border-top: 1px solid var(--border);">
-                
-                <button class="btn btn-primary" id="saveArchiveBtn">
-                    <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-                    ატვირთვა
-                </button>
-                <button class="btn btn-outline" id="downloadBtn">
-                    <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    გადმოწერა
-                </button>
-            </aside>
-
-            <main class="canvas-area" id="canvas-area-main">
-                <div class="empty-placeholder" id="emptyPlaceholder">
-                    <svg style="width: 48px; height: 48px; stroke: var(--text-light);" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
-                    <span>ხელმოსაწერი დოკუმენტი არ არის ატვირთული</span>
-                </div>
-                <div id="canvas-container"></div>
-            </main>
+        <div class="panel-title">
+            <h2>Chemnitz</h2>
+            <p>Öffentlicher Nahverkehr</p>
         </div>
 
-        <div id="archive-view">
-            <div class="archive-header">
-                <h2>არქივი</h2>
-                <input type="text" id="archiveSearch" class="search-box" placeholder="ძებნა..." oninput="filterArchive()">
-            </div>
-            <div class="archive-grid" id="archiveGrid"></div>
+        <div class="search">
+            <input
+                type="text"
+                id="search"
+                placeholder="Haltestelle suchen..."
+            >
         </div>
-    </div>
 
-    <script>
-        const supabaseUrl = 'https://prqphtwuopvgjejfvmwo.supabase.co';
-        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBycXBodHd1b3B2Z2plamZ2bXdvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzMzk2ODAsImV4cCI6MjEwMzkxNTY4MH0.R710Je4gstv5OujKlCtQNz_piEcC3IW8dBseZxNvUpo';
-        const supabaseInstance = window.supabase.createClient(supabaseUrl, supabaseKey);
+        <div id="content">
+            <div class="loading">
+                Lade Verkehrsdaten...
+            </div>
+        </div>
 
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    </aside>
 
-        function getWritingLoaderHtml(text = 'გთხოვთ მოიცადოთ...') {
-            return `
-                <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px;">
-                    <svg viewBox="0 0 150 75" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 140px; height: auto;">
-                        <rect x="15" y="8" width="120" height="60" rx="6" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
-                        <line x1="30" y1="20" x2="120" y2="20" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
-                        <line x1="30" y1="30" x2="90" y2="30" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
-                        <line x1="30" y1="48" x2="120" y2="48" stroke="#4f46e5" stroke-width="2" stroke-dasharray="3 3"/>
-                        <path class="writing-path" d="M35 50 C 42 38, 52 56, 62 42 C 68 35, 74 48, 84 44 C 90 41, 96 46, 102 40" stroke="#4f46e5" stroke-width="3" stroke-linecap="round" fill="none"/>
-                    </svg>
-                    <span style="font-weight:600; color:var(--text-light);">${text}</span>
-                </div>
-            `;
+</div>
+
+<script>
+
+// ======================================
+// 1. MAP
+// ======================================
+
+const map = L.map('map', {
+    minZoom: 6,
+    maxZoom: 19,
+    maxBounds: [
+        [47, 5.5],
+        [55.2, 15.8]
+    ],
+    maxBoundsViscosity: 1
+}).setView([50.833, 12.925], 12);
+
+L.tileLayer(
+    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 19
+    }
+).addTo(map);
+
+const markers = L.layerGroup().addTo(map);
+
+let stops = [];
+let routes = {};
+let trips = {};
+let calendar = {};
+let exceptions = {};
+let stopTimes = {};
+
+let selectedStop = null;
+
+
+// ======================================
+// 2. CSV PARSER
+// ======================================
+
+function parseCSV(text) {
+
+    return Papa.parse(text, {
+        header: true,
+        skipEmptyLines: true
+    }).data;
+}
+
+
+// ======================================
+// 3. LOAD GTFS ZIP
+// ======================================
+
+async function loadGTFS() {
+
+    try {
+
+        const response = await fetch(
+            './GTFS_VMS_2026-10-26.zip'
+        );
+
+        if (!response.ok) {
+            throw new Error('GTFS ZIP nicht gefunden');
         }
 
-        function showLoading(msg = 'გთხოვთ მოიცადოთ...') {
-            document.getElementById('loading-msg').innerText = msg;
-            document.getElementById('loading-overlay').style.display = 'flex';
+        const buffer = await response.arrayBuffer();
+
+        const zip = await JSZip.loadAsync(buffer);
+
+        async function readFile(name) {
+
+            const file = zip.file(name);
+
+            if (!file) return [];
+
+            return parseCSV(
+                await file.async('text')
+            );
         }
 
-        function hideLoading() {
-            document.getElementById('loading-overlay').style.display = 'none';
-        }
+        const [
+            rawStops,
+            rawRoutes,
+            rawTrips,
+            rawTimes,
+            rawCalendar,
+            rawExceptions
+        ] = await Promise.all([
 
-        function showToast(message, type = 'info') {
-            const container = document.getElementById('toast-container');
-            const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
-            
-            let iconSvg = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';
-            if(type === 'success') iconSvg = '<svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>';
-            if(type === 'error') iconSvg = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
+            readFile('stops.txt'),
+            readFile('routes.txt'),
+            readFile('trips.txt'),
+            readFile('stop_times.txt'),
+            readFile('calendar.txt'),
+            readFile('calendar_dates.txt')
 
-            toast.innerHTML = iconSvg + '<span>' + message + '</span>';
-            container.appendChild(toast);
-            setTimeout(() => toast.classList.add('show'), 100);
-            setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 400); }, 5000);
-        }
+        ]);
 
-        function loadImageAsync(src) {
-            return new Promise((resolve, reject) => {
-                const img = new Image();
-                img.onload = () => resolve(img);
-                img.onerror = reject;
-                img.src = src;
-            });
-        }
+        // Chemnitz city area
 
-        window.login = function() {
-            const user = document.getElementById('username').value.trim();
-            const pass = document.getElementById('password').value.trim();
-            if (user === 'alex' && pass === '2911') {
-                sessionStorage.setItem('isLoggedIn', 'true');
-                document.getElementById('login-page').style.display = 'none';
-                document.getElementById('app-container').style.display = 'flex';
-                showToast('წარმატებით შეხვედით', 'success');
-                loadCloudSignature();
-                loadCloudDigitsTemplate();
-                loadCloudAlphabetTemplate();
-            } else {
-                showToast('არასწორი მონაცემები!', 'error');
-            }
-        };
+        stops = rawStops.filter(s => {
 
-        window.logout = function() {    
-            sessionStorage.removeItem('isLoggedIn');
-            location.reload();    
-        };
+            const lat = Number(s.stop_lat);
+            const lon = Number(s.stop_lon);
 
-        window.resetAppWorkspace = function() {
-            window.switchView('workspace');
-            document.getElementById('docInput').value = '';
-            document.getElementById('docNameInput').value = '';
-            canvasContainer.innerHTML = '';
-            document.getElementById('emptyPlaceholder').style.display = 'flex';
-            isDocLoaded = false;
-            originalPdfBytes = null;
-            showToast('სამუშაო სივრცე განახლდა', 'info');
-        };
+            return (
+                lat >= 50.70 &&
+                lat <= 50.98 &&
+                lon >= 12.75 &&
+                lon <= 13.15
+            );
 
-        window.switchView = function(view) {
-            document.getElementById('nav-workspace').classList.remove('active');
-            document.getElementById('nav-archive').classList.remove('active');
-            if (view === 'workspace') {
-                document.getElementById('workspace-view').style.display = 'flex';
-                document.getElementById('archive-view').style.display = 'none';
-                document.getElementById('nav-workspace').classList.add('active');
-            } else {
-                document.getElementById('workspace-view').style.display = 'none';
-                document.getElementById('archive-view').style.display = 'flex';
-                document.getElementById('nav-archive').classList.add('active');
-                loadArchive();
-            }
-        };
-
-        window.onload = function() {
-            if (sessionStorage.getItem('isLoggedIn') === 'true') {
-                document.getElementById('login-page').style.display = 'none';
-                document.getElementById('app-container').style.display = 'flex';
-                loadCloudSignature();
-                loadCloudDigitsTemplate();
-                loadCloudAlphabetTemplate();
-            }
-        };
-
-        const canvasContainer = document.getElementById('canvas-container');
-        let sigImage = new Image();
-        let dateImage = new Image();
-        let digitsTemplateImg = new Image();
-        let alphabetTemplateImg = new Image();
-        let textImage = new Image();
-        let isDocLoaded = false, isSigLoaded = false, isDigitsLoaded = false, isDateLoaded = false, isAlphabetLoaded = false, isTextLoaded = false;
-        let activeOverlayMode = 'sig';
-        let originalPdfBytes = null;
-        let archiveDataCache = [];
-        let currentModalPdf = null;
-
-        window.setOverlayMode = function(mode) {
-            activeOverlayMode = mode;
-            const sigBtn = document.getElementById('modeSigBtn');
-            const dateBtn = document.getElementById('modeDateBtn');
-            const textBtn = document.getElementById('modeTextBtn');
-            const sigSection = document.getElementById('sigToolSection');
-            const dateSection = document.getElementById('dateToolSection');
-            const textSection = document.getElementById('textToolSection');
-
-            sigBtn.style.borderColor = 'var(--border)'; sigBtn.style.color = 'var(--text-dark)';
-            dateBtn.style.borderColor = 'var(--border)'; dateBtn.style.color = 'var(--text-dark)';
-            textBtn.style.borderColor = 'var(--border)'; textBtn.style.color = 'var(--text-dark)';
-            sigSection.style.display = 'none';
-            dateSection.style.display = 'none';
-            textSection.style.display = 'none';
-
-            if (mode === 'sig') {
-                sigBtn.style.borderColor = 'var(--primary)';
-                sigBtn.style.color = 'var(--primary)';
-                sigSection.style.display = 'flex';
-            } else if (mode === 'date') {
-                dateBtn.style.borderColor = 'var(--primary)';
-                dateBtn.style.color = 'var(--primary)';
-                dateSection.style.display = 'flex';
-            } else if (mode === 'text') {
-                textBtn.style.borderColor = 'var(--primary)';
-                textBtn.style.color = 'var(--primary)';
-                textSection.style.display = 'flex';
-            }
-        };
-
-        async function loadCloudDigitsTemplate() {
-            const cached = localStorage.getItem('shogi_digits_template');
-            if (cached) {
-                try {
-                    digitsTemplateImg = await loadImageAsync(cached);
-                    isDigitsLoaded = true;
-                    document.getElementById('digitsPreview').src = cached;
-                    document.getElementById('digitsPreview').style.display = 'block';
-                    document.getElementById('digitsBtnText').innerText = 'შაბლონის შეცვლა';
-                } catch(e) {}
-            }
-            try {
-                const { data, error } = await supabaseInstance.storage.from('signatures').download('alex/digits_template.png');
-                if (error) return;
-                const url = URL.createObjectURL(data);
-                digitsTemplateImg = await loadImageAsync(url);
-                isDigitsLoaded = true;
-                document.getElementById('digitsPreview').src = url;
-                document.getElementById('digitsPreview').style.display = 'block';
-                document.getElementById('digitsBtnText').innerText = 'შაბლონის შეცვლა';
-            } catch(e) {}
-        }
-
-        async function loadCloudAlphabetTemplate() {
-            const cached = localStorage.getItem('shogi_alphabet_template');
-            if (cached) {
-                try {
-                    alphabetTemplateImg = await loadImageAsync(cached);
-                    isAlphabetLoaded = true;
-                    document.getElementById('alphabetPreview').src = cached;
-                    document.getElementById('alphabetPreview').style.display = 'block';
-                    document.getElementById('alphabetBtnText').innerText = 'შაბლონის შეცვლა';
-                } catch(e) {}
-            }
-            try {
-                const { data, error } = await supabaseInstance.storage.from('signatures').download('alex/alphabet_template.png');
-                if (error) return;
-                const url = URL.createObjectURL(data);
-                alphabetTemplateImg = await loadImageAsync(url);
-                isAlphabetLoaded = true;
-                document.getElementById('alphabetPreview').src = url;
-                document.getElementById('alphabetPreview').style.display = 'block';
-                document.getElementById('alphabetBtnText').innerText = 'შაბლონის შეცვლა';
-            } catch(e) {}
-        }
-
-        document.getElementById('digitsInput').addEventListener('change', async function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-            showLoading('შაბლონი იტვირთება...');
-            try {
-                const { error } = await supabaseInstance.storage.from('signatures').upload('alex/digits_template.png', file, { upsert: true });
-                if (error) throw error;
-                
-                const reader = new FileReader();
-                reader.onload = async function(event) {
-                    const dataUrl = event.target.result;
-                    localStorage.setItem('shogi_digits_template', dataUrl);
-                    try {
-                        digitsTemplateImg = await loadImageAsync(dataUrl);
-                        isDigitsLoaded = true;
-                        document.getElementById('digitsPreview').src = dataUrl;
-                        document.getElementById('digitsPreview').style.display = 'block';
-                        document.getElementById('digitsBtnText').innerText = 'შაბლონის შეცვლა';
-                        showToast('ციფრების შაბლონი წარმატებით განახლდა', 'success');
-                    } catch(err) {
-                        showToast('შაბლონის ჩატვირთვის შეცდომა', 'error');
-                    }
-                };
-                reader.readAsDataURL(file);
-            } catch(err) {
-                showToast('შეცდომა: ' + err.message, 'error');
-            } finally {
-                hideLoading();
-            }
         });
 
-        document.getElementById('alphabetInput').addEventListener('change', async function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-            showLoading('ანბანის შაბლონი იტვირთება...');
-            try {
-                const { error } = await supabaseInstance.storage.from('signatures').upload('alex/alphabet_template.png', file, { upsert: true });
-                if (error) throw error;
-                
-                const reader = new FileReader();
-                reader.onload = async function(event) {
-                    const dataUrl = event.target.result;
-                    localStorage.setItem('shogi_alphabet_template', dataUrl);
-                    try {
-                        alphabetTemplateImg = await loadImageAsync(dataUrl);
-                        isAlphabetLoaded = true;
-                        document.getElementById('alphabetPreview').src = dataUrl;
-                        document.getElementById('alphabetPreview').style.display = 'block';
-                        document.getElementById('alphabetBtnText').innerText = 'შაბლონის შეცვლა';
-                        showToast('ანბანის შაბლონი წარმატებით განახლდა', 'success');
-                    } catch(err) {
-                        showToast('შაბლონის ჩატვირთვის შეცდომა', 'error');
-                    }
-                };
-                reader.readAsDataURL(file);
-            } catch(err) {
-                showToast('შეცდომა: ' + err.message, 'error');
-            } finally {
-                hideLoading();
-            }
+        rawRoutes.forEach(r => {
+            routes[r.route_id] = r;
         });
 
-        window.prepareCustomDateOverlay = async function() {
-            if (!isDigitsLoaded || digitsTemplateImg.naturalWidth === 0) {
-                return showToast("ჯერ ატვირთეთ ციფრების შაბლონის ფოტო (1,2,3,4,5,6,7,8,9,0,.)", "error");
-            }
-            const val = document.getElementById('dateInput').value;
-            if (!val) return showToast("გთხოვთ აირჩიოთ თარიღი!", "error");
-
-            const parts = val.split('-');
-            const formattedDate = parts.length === 3 ? `${parts[2]}.${parts[1]}.${parts[0]}` : val;
-
-            const tCanvas = document.createElement('canvas');
-            const tCtx = tCanvas.getContext('2d');
-            tCanvas.width = digitsTemplateImg.naturalWidth;
-            tCanvas.height = digitsTemplateImg.naturalHeight;
-            tCtx.drawImage(digitsTemplateImg, 0, 0);
-
-            const imgData = tCtx.getImageData(0, 0, tCanvas.width, tCanvas.height);
-            const data = imgData.data;
-            const w = tCanvas.width;
-            const h = tCanvas.height;
-
-            const colHasInk = new Array(w).fill(false);
-            for (let x = 0; x < w; x++) {
-                for (let y = 0; y < h; y++) {
-                    const idx = (y * w + x) * 4;
-                    const r = data[idx], g = data[idx+1], b = data[idx+2], a = data[idx+3];
-                    if (a > 30 && (r < 220 || g < 220 || b < 220)) {
-                        colHasInk[x] = true;
-                        break;
-                    }
-                }
-            }
-
-            let rawSlices = [];
-            let inChar = false;
-            let startX = 0;
-            for (let x = 0; x < w; x++) {
-                if (colHasInk[x] && !inChar) {
-                    inChar = true;
-                    startX = x;
-                } else if (!colHasInk[x] && inChar) {
-                    inChar = false;
-                    if (x - startX >= 2) {
-                        rawSlices.push({ x: startX, width: x - startX });
-                    }
-                }
-            }
-            if (inChar && w - startX >= 2) {
-                rawSlices.push({ x: startX, width: w - startX });
-            }
-
-            const charOrder = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '.'];
-            const charSlices = {};
-
-            if (rawSlices.length >= 10) {
-                for (let i = 0; i < Math.min(rawSlices.length, 11); i++) {
-                    const s = rawSlices[i];
-                    let minY = h, maxY = 0, hasVerticalInk = false;
-                    for (let x = s.x; x < s.x + s.width; x++) {
-                        for (let y = 0; y < h; y++) {
-                            const idx = (y * w + Math.floor(x)) * 4;
-                            if (data[idx+3] > 30 && (data[idx] < 220 || data[idx+1] < 220 || data[idx+2] < 220)) {
-                                hasVerticalInk = true;
-                                if (y < minY) minY = y;
-                                if (y > maxY) maxY = y;
-                            }
-                        }
-                    }
-                    const charChar = charOrder[i] || '0';
-                    charSlices[charChar] = hasVerticalInk ? { x: s.x, y: minY, width: s.width, height: (maxY - minY + 1) } : { x: s.x, y: 0, width: s.width, height: h };
-                }
-            } else {
-                const colWidth = w / 11;
-                for (let i = 0; i < 11; i++) {
-                    charSlices[charOrder[i]] = { x: i * colWidth, y: 0, width: colWidth, height: h };
-                }
-            }
-
-            const outCanvas = document.createElement('canvas');
-            const outCtx = outCanvas.getContext('2d');
-            
-            const qualityScale = 3;
-            const targetCharHeight = 45 * qualityScale;
-            const spacing = 4 * qualityScale;
-            
-            let totalOutWidth = 0;
-            const evaluatedChars = [];
-
-            for (let i = 0; i < formattedDate.length; i++) {
-                const char = formattedDate[i];
-                const slice = charSlices[char] || { x: 0, y: 0, width: w/11, height: h };
-                
-                let targetW, targetH;
-                if (char === '.') {
-                    const scaleFactor = targetCharHeight / h;
-                    targetW = Math.max(slice.width * scaleFactor * 0.3, targetCharHeight * 0.12);
-                    targetH = targetCharHeight * 0.18;
-                } else {
-                    targetW = slice.width * (targetCharHeight / slice.height);
-                    targetH = targetCharHeight;
-                }
-
-                evaluatedChars.push({ char, slice, targetW, targetH });
-                totalOutWidth += targetW + (char === '.' ? spacing * 0.4 : spacing);
-            }
-
-            outCanvas.width = totalOutWidth + (10 * qualityScale);
-            outCanvas.height = targetCharHeight + (10 * qualityScale);
-            
-            outCtx.imageSmoothingEnabled = true;
-            outCtx.imageSmoothingQuality = 'high';
-            outCtx.clearRect(0, 0, outCanvas.width, outCanvas.height);
-
-            let currentX = 5 * qualityScale;
-            for (let item of evaluatedChars) {
-                let drawY = 3 * qualityScale;
-                let drawH = item.targetH;
-                if (item.char === '.') {
-                    drawY = 3 * qualityScale + targetCharHeight - item.targetH - (targetCharHeight * 0.12);
-                }
-
-                outCtx.drawImage(
-                    tCanvas,
-                    item.slice.x, item.slice.y, item.slice.width, item.slice.height,
-                    currentX, drawY, item.targetW, drawH
-                );
-                currentX += item.targetW + (item.char === '.' ? spacing * 0.4 : spacing);
-            }
-
-            const dataUrl = outCanvas.toDataURL('image/png');
-            try {
-                dateImage = await loadImageAsync(dataUrl);
-                isDateLoaded = true;
-                const preview = document.getElementById('datePreview');
-                preview.src = dataUrl;
-                preview.style.display = 'block';
-                showToast("თარიღი გენერირებულია წარმატებით!", "success");
-            } catch(e) {
-                showToast("თარიღის გენერაციის შეცდომა", "error");
-            }
-        };
-
-        window.prepareCustomTextOverlay = async function() {
-            if (!isAlphabetLoaded || alphabetTemplateImg.naturalWidth === 0) {
-                return showToast("ჯერ ატვირთეთ ანბანის შაბლონის ფოტო (a-z, A-Z)", "error");
-            }
-            const textVal = document.getElementById('customTextInput').value;
-            if (!textVal) return showToast("გთხოვთ ჩაწეროთ ტექსტი!", "error");
-
-            const tCanvas = document.createElement('canvas');
-            const tCtx = tCanvas.getContext('2d');
-            tCanvas.width = alphabetTemplateImg.naturalWidth;
-            tCanvas.height = alphabetTemplateImg.naturalHeight;
-            tCtx.drawImage(alphabetTemplateImg, 0, 0);
-
-            const imgData = tCtx.getImageData(0, 0, tCanvas.width, tCanvas.height);
-            const data = imgData.data;
-            const w = tCanvas.width;
-            const h = tCanvas.height;
-
-            const lowerChars = ['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z'];
-            const upperChars = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'];
-            const charSlices = {};
-
-            function extractDynamicRowSlices(startY, endY, charList) {
-                const colHasInk = new Array(w).fill(false);
-                for (let x = 0; x < w; x++) {
-                    for (let y = Math.floor(startY); y < Math.ceil(endY) && y < h; y++) {
-                        const idx = (y * w + x) * 4;
-                        const r = data[idx], g = data[idx+1], b = data[idx+2], a = data[idx+3];
-                        if (a > 30 && (r < 220 || g < 220 || b < 220)) {
-                            colHasInk[x] = true;
-                            break;
-                        }
-                    }
-                }
-
-                let rawSlices = [];
-                let inChar = false;
-                let startX = 0;
-                for (let x = 0; x < w; x++) {
-                    if (colHasInk[x] && !inChar) {
-                        inChar = true;
-                        startX = x;
-                    } else if (!colHasInk[x] && inChar) {
-                        inChar = false;
-                        if (x - startX >= 2) {
-                            rawSlices.push({ x: startX, width: x - startX });
-                        }
-                    }
-                }
-                if (inChar && w - startX >= 2) {
-                    rawSlices.push({ x: startX, width: w - startX });
-                }
-
-                for (let i = 0; i < charList.length; i++) {
-                    const char = charList[i];
-                    if (i < rawSlices.length) {
-                        const s = rawSlices[i];
-                        let minY = endY, maxY = startY;
-                        let hasVerticalInk = false;
-
-                        for (let x = s.x; x < s.x + s.width; x++) {
-                            for (let y = Math.floor(startY); y < Math.ceil(endY) && y < h; y++) {
-                                const idx = (y * w + x) * 4;
-                                if (data[idx+3] > 30 && (data[idx] < 220 || data[idx+1] < 220 || data[idx+2] < 220)) {
-                                    hasVerticalInk = true;
-                                    if (y < minY) minY = y;
-                                    if (y > maxY) maxY = y;
-                                }
-                            }
-                        }
-                        charSlices[char] = hasVerticalInk ? { x: s.x, y: minY, width: s.width, height: (maxY - minY + 1) } : { x: s.x, y: startY, width: s.width, height: endY - startY };
-                    } else {
-                        const fallbackW = w / charList.length;
-                        const fallbackX = i * fallbackW;
-                        charSlices[char] = { x: fallbackX, y: startY, width: fallbackW, height: endY - startY };
-                    }
-                }
-            }
-
-            extractDynamicRowSlices(0, h * 0.5, lowerChars);
-            extractDynamicRowSlices(h * 0.5, h, upperChars);
-            
-            charSlices[' '] = { x: 0, y: 0, width: w / 26 * 0.5, height: h * 0.5 };
-
-            const outCanvas = document.createElement('canvas');
-            const outCtx = outCanvas.getContext('2d');
-
-            const qualityScale = 3;
-            const targetCharHeight = 45 * qualityScale;
-            const spacing = 3 * qualityScale;
-
-            let totalOutWidth = 0;
-            const evaluatedChars = [];
-
-            for (let i = 0; i < textVal.length; i++) {
-                const char = textVal[i];
-                const slice = charSlices[char] || charSlices['a'] || { x: 0, y: 0, width: w/26, height: h/2 };
-
-                let targetW, targetH;
-                if (char === ' ') {
-                    targetW = targetCharHeight * 0.3;
-                    targetH = targetCharHeight;
-                } else {
-                    targetW = slice.width * (targetCharHeight / slice.height);
-                    targetH = targetCharHeight;
-                }
-
-                evaluatedChars.push({ char, slice, targetW, targetH });
-                totalOutWidth += targetW + spacing;
-            }
-
-            outCanvas.width = totalOutWidth + (10 * qualityScale);
-            outCanvas.height = targetCharHeight + (10 * qualityScale);
-
-            outCtx.imageSmoothingEnabled = true;
-            outCtx.imageSmoothingQuality = 'high';
-            outCtx.clearRect(0, 0, outCanvas.width, outCanvas.height);
-
-            let currentX = 5 * qualityScale;
-            for (let item of evaluatedChars) {
-                let drawY = 3 * qualityScale;
-                if (item.char !== ' ') {
-                    outCtx.drawImage(
-                        tCanvas,
-                        item.slice.x, item.slice.y, item.slice.width, item.slice.height,
-                        currentX, drawY, item.targetW, item.targetH
-                    );
-                }
-                currentX += item.targetW + spacing;
-            }
-
-            const dataUrl = outCanvas.toDataURL('image/png');
-            try {
-                textImage = await loadImageAsync(dataUrl);
-                isTextLoaded = true;
-                const preview = document.getElementById('textPreview');
-                preview.src = dataUrl;
-                preview.style.display = 'block';
-                showToast("ტექსტი გენერირებულია წარმატებით!", "success");
-            } catch(e) {
-                showToast("ტექსტის გენერაციის შეცდომა", "error");
-            }
-        };
-
-        async function loadCloudSignature() {
-            const cached = localStorage.getItem('shogi_signature');
-            if (cached) {
-                try {
-                    sigImage = await loadImageAsync(cached);
-                    isSigLoaded = true;
-                    document.getElementById('sigPreview').src = cached;
-                    document.getElementById('sigPreview').style.display = 'block';
-                    document.getElementById('sigBtnText').innerText = 'ხელმოწერის შეცვლა';
-                } catch(e) {}
-            }
-            try {
-                const { data, error } = await supabaseInstance.storage.from('signatures').download('alex/signature.png');
-                if (error) return;
-                const url = URL.createObjectURL(data);
-                sigImage = await loadImageAsync(url);
-                isSigLoaded = true;
-                document.getElementById('sigPreview').src = url;
-                document.getElementById('sigPreview').style.display = 'block';
-                document.getElementById('sigBtnText').innerText = 'ხელმოწერის შეცვლა';
-            } catch(e) {}
-        }
-
-        document.getElementById('sigInput').addEventListener('change', async function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-            showLoading('ხელმოწერა იტვირთება...');
-            try {
-                const { error } = await supabaseInstance.storage.from('signatures').upload('alex/signature.png', file, { upsert: true });
-                if (error) throw error;
-
-                const reader = new FileReader();
-                reader.onload = async function(event) {
-                    const dataUrl = event.target.result;
-                    localStorage.setItem('shogi_signature', dataUrl);
-                    try {
-                        sigImage = await loadImageAsync(dataUrl);
-                        isSigLoaded = true;
-                        document.getElementById('sigPreview').src = dataUrl;
-                        document.getElementById('sigPreview').style.display = 'block';
-                        document.getElementById('sigBtnText').innerText = 'ხელმოწერის შეცვლა';
-                        showToast('ხელმოწერა წარმატებით განახლდა', 'success');
-                    } catch(err) {
-                        showToast('ხელმოწერის ჩატვირთვის შეცდომა', 'error');
-                    }
-                };
-                reader.readAsDataURL(file);
-            } catch(err) {
-                showToast('შეცდომა: ' + err.message, 'error');
-            } finally {
-                hideLoading();
-            }
+        rawTrips.forEach(t => {
+            trips[t.trip_id] = t;
         });
 
-        document.getElementById('docInput').addEventListener('change', async function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-            
-            let baseName = file.name.replace(/\.[^/.]+$/, "");
-            document.getElementById('docNameInput').value = baseName;
-
-            canvasContainer.innerHTML = '';
-            showLoading('დოკუმენტი მუშავდება');
-
-            if (file.type === 'application/pdf') {
-                try {
-                    const arrayBuffer = await file.arrayBuffer();
-                    originalPdfBytes = new Uint8Array(arrayBuffer);
-
-                    const typedarray = new Uint8Array(arrayBuffer);
-                    const pdf = await pdfjsLib.getDocument(typedarray).promise;
-                    
-                    await new Promise((resolve, reject) => {
-                        let pageNum = 1;
-                        const processNextPage = async () => {
-                            if (pageNum > pdf.numPages) {
-                                resolve();
-                                return;
-                            }
-                            try {
-                                document.getElementById('loading-msg').innerText = `აიტვირთა ${pageNum} გვერდი ${pdf.numPages}-დან...`;
-                                
-                                const page = await pdf.getPage(pageNum);
-                                const viewport = page.getViewport({ scale: 2.0 });
-                                const wrapper = document.createElement('div');
-                                wrapper.className = 'page-wrapper';
-                                const canvas = document.createElement('canvas');
-                                canvas.className = 'pdf-page';
-                                canvas.width = viewport.width;
-                                canvas.height = viewport.height;
-                                wrapper.appendChild(canvas);
-                                canvasContainer.appendChild(wrapper);
-                                
-                                await page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
-                                
-                                pageNum++;
-                                setTimeout(processNextPage, 5);
-                            } catch(e) {
-                                reject(e);
-                            }
-                        };
-                        processNextPage();
-                    });
-
-                    isDocLoaded = true;
-                    document.getElementById('emptyPlaceholder').style.display = 'none';
-                    showToast(`ჩაიტვირთა ${pdf.numPages} გვერდი`, 'success');
-                } catch(err) {
-                    showToast('PDF შეცდომა: ' + err.message, 'error');
-                } finally {
-                    hideLoading();
-                }
-            }
+        rawCalendar.forEach(c => {
+            calendar[c.service_id] = c;
         });
 
-        canvasContainer.addEventListener('contextmenu', function(e) {
-            const wrapper = e.target.closest('.page-wrapper');
-            if (!wrapper) return;
-            e.preventDefault();
-            
-            if (!isDocLoaded) return showToast("ჯერ ატვირთეთ დოკუმენტი!", "error");
+        rawExceptions.forEach(e => {
 
-            let currentImg = null;
-            let defaultWidth = 120;
-
-            if (activeOverlayMode === 'sig') {
-                if (!isSigLoaded || sigImage.naturalWidth === 0) return showToast("ჯერ ატვირთეთ ხელმოწერა!", "error");
-                currentImg = sigImage;
-                defaultWidth = 120;
-            } else if (activeOverlayMode === 'date') {
-                if (!isDateLoaded || dateImage.naturalWidth === 0) return showToast("ჯერ დაგენერირეთ თარიღი!", "error");
-                currentImg = dateImage;
-                defaultWidth = 110;
-            } else if (activeOverlayMode === 'text') {
-                if (!isTextLoaded || textImage.naturalWidth === 0) return showToast("ჯერ დაგენერირეთ ტექსტი!", "error");
-                currentImg = textImage;
-                defaultWidth = 140;
+            if (!exceptions[e.date]) {
+                exceptions[e.date] = {};
             }
 
-            const canvas = wrapper.querySelector('canvas');
-            const rect = canvas.getBoundingClientRect();
-            
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            exceptions[e.date][e.service_id] =
+                Number(e.exception_type);
 
-            const sigDiv = document.createElement('div');
-            sigDiv.className = 'signature-overlay';
-            const sigWidth = defaultWidth;
-            const sigHeight = (currentImg.naturalHeight / currentImg.naturalWidth) * sigWidth;
-            sigDiv.style.width = sigWidth + 'px';
-            sigDiv.style.height = sigHeight + 'px';
-            sigDiv.style.left = (x - sigWidth / 2) + 'px';
-            sigDiv.style.top = (y - sigHeight / 2) + 'px';
-            sigDiv.dataset.rotation = '0';
-
-            const imgElement = document.createElement('img');
-            imgElement.src = currentImg.src;
-            
-            const delBtn = document.createElement('button');
-            delBtn.className = 'sig-delete';
-            delBtn.innerHTML = '✕';
-            delBtn.onclick = (event) => { event.stopPropagation(); sigDiv.remove(); };
-
-            const resizeHandle = document.createElement('div');
-            resizeHandle.className = 'sig-resize';
-
-            const rotateHandle = document.createElement('div');
-            rotateHandle.className = 'sig-rotate';
-            rotateHandle.innerHTML = '↻';
-
-            sigDiv.appendChild(imgElement);
-            sigDiv.appendChild(delBtn);
-            sigDiv.appendChild(resizeHandle);
-            sigDiv.appendChild(rotateHandle);
-            wrapper.appendChild(sigDiv);
-
-            setupInteractions(sigDiv, resizeHandle, rotateHandle);
-            showToast(activeOverlayMode === 'sig' ? "ხელმოწერა დაემატა" : (activeOverlayMode === 'date' ? "თარიღი დაემატა" : "ტექსტი დაემატა"), "success");
         });
 
-        function setupInteractions(container, resizer, rotator) {
-            let isDragging = false, isResizing = false, isRotating = false;
-            let startX, startY, startWidth, startLeft, startTop;
+        // Index stop times by stop ID
 
-            container.addEventListener('pointerdown', function(e) {
-                if (e.target.closest('button') || e.target === resizer || e.target === rotator) return;
-                isDragging = true;
-                startX = e.clientX;
-                startY = e.clientY;
-                startLeft = container.offsetLeft;
-                startTop = container.offsetTop;
-                e.preventDefault();
+        rawTimes.forEach(t => {
 
-                const onPointerMove = (moveEvent) => {
-                    if (isDragging) {
-                        const dx = moveEvent.clientX - startX;
-                        const dy = moveEvent.clientY - startY;
-                        container.style.left = (startLeft + dx) + 'px';
-                        container.style.top = (startTop + dy) + 'px';
-                    }
-                };
-
-                const onPointerUp = () => {
-                    isDragging = false;
-                    window.removeEventListener('pointermove', onPointerMove);
-                    window.removeEventListener('pointerup', onPointerUp);
-                };
-
-                window.addEventListener('pointermove', onPointerMove);
-                window.addEventListener('pointerup', onPointerUp);
-            });
-
-            resizer.addEventListener('pointerdown', function(e) {
-                isResizing = true;
-                startX = e.clientX;
-                startY = e.clientY;
-                startWidth = container.offsetWidth;
-                e.stopPropagation();
-                e.preventDefault();
-
-                const onPointerMove = (moveEvent) => {
-                    if (isResizing) {
-                        const dx = moveEvent.clientX - startX;
-                        const newWidth = Math.max(50, startWidth + dx);
-                        container.style.width = newWidth + 'px';
-                        container.style.height = 'auto';
-                    }
-                };
-
-                const onPointerUp = () => {
-                    isResizing = false;
-                    window.removeEventListener('pointermove', onPointerMove);
-                    window.removeEventListener('pointerup', onPointerUp);
-                };
-
-                window.addEventListener('pointermove', onPointerMove);
-                window.addEventListener('pointerup', onPointerUp);
-            });
-
-            rotator.addEventListener('pointerdown', function(e) {
-                isRotating = true;
-                e.stopPropagation();
-                e.preventDefault();
-
-                const onPointerMove = (moveEvent) => {
-                    if (isRotating) {
-                        const rect = container.getBoundingClientRect();
-                        const cx = rect.left + rect.width / 2;
-                        const cy = rect.top + rect.height / 2;
-                        const radians = Math.atan2(moveEvent.clientY - cy, moveEvent.clientX - cx);
-                        let degree = (radians * (180 / Math.PI)) + 90;
-                        container.style.transform = `rotate(${degree}deg)`;
-                        container.dataset.rotation = degree;
-                    }
-                };
-
-                const onPointerUp = () => {
-                    isRotating = false;
-                    window.removeEventListener('pointermove', onPointerMove);
-                    window.removeEventListener('pointerup', onPointerUp);
-                };
-
-                window.addEventListener('pointermove', onPointerMove);
-                window.addEventListener('pointerup', onPointerUp);
-            });
-        }
-
-        async function generateOriginalQualityPDF() {
-            if (!originalPdfBytes) return null;
-            
-            const pdfDoc = await PDFLib.PDFDocument.load(originalPdfBytes);
-            const pages = pdfDoc.getPages();
-            const wrappers = document.querySelectorAll('.page-wrapper');
-
-            for (let i = 0; i < wrappers.length; i++) {
-                if (i >= pages.length) break;
-                const wrapper = wrappers[i];
-                const canvas = wrapper.querySelector('.pdf-page');
-                const sigs = wrapper.querySelectorAll('.signature-overlay');
-                if (sigs.length === 0) continue;
-
-                const page = pages[i];
-                const { width: pdfWidth, height: pdfHeight } = page.getSize();
-                const canvasRect = canvas.getBoundingClientRect();
-
-                for (let j = 0; j < sigs.length; j++) {
-                    const sig = sigs[j];
-                    const sigRect = sig.getBoundingClientRect();
-                    const imgEl = sig.querySelector('img');
-                    if (!imgEl) continue;
-
-                    const tempImg = await loadImageAsync(imgEl.src);
-                    if (tempImg.naturalWidth === 0 || tempImg.naturalHeight === 0) continue;
-
-                    const overlayCanvas = document.createElement('canvas');
-                    overlayCanvas.width = tempImg.naturalWidth;
-                    overlayCanvas.height = tempImg.naturalHeight;
-                    const oCtx = overlayCanvas.getContext('2d');
-                    oCtx.drawImage(tempImg, 0, 0);
-
-                    const pngDataUrl = overlayCanvas.toDataURL('image/png');
-                    const pngBytes = await fetch(pngDataUrl).then(res => res.arrayBuffer());
-                    const embeddedOverlayImage = await pdfDoc.embedPng(pngBytes);
-
-                    const domLeft = sigRect.left - canvasRect.left;
-                    const domTop = sigRect.top - canvasRect.top;
-                    const domWidth = sigRect.width;
-                    const domHeight = sigRect.height;
-
-                    const scaleX = pdfWidth / canvasRect.width;
-                    const scaleY = pdfHeight / canvasRect.height;
-
-                    const width = domWidth * scaleX;
-                    const height = domHeight * scaleY;
-                    const x = domLeft * scaleX;
-                    const y = pdfHeight - (domTop + domHeight) * scaleY;
-
-                    const rotation = parseFloat(sig.dataset.rotation || 0);
-
-                    if (rotation === 0) {
-                        page.drawImage(embeddedOverlayImage, {
-                            x: x,
-                            y: y,
-                            width: width,
-                            height: height,
-                            blendMode: PDFLib.BlendMode.Multiply,
-                            opacity: 0.93,
-                        });
-                    } else {
-                        const radians = (rotation * Math.PI) / 180;
-                        const centerX = x + width / 2;
-                        const centerY = y + height / 2;
-
-                        page.pushOperators(
-                            PDFLib.pushGraphicsState(),
-                            PDFLib.concatTransformationMatrix(
-                                Math.cos(radians), Math.sin(radians),
-                                -Math.sin(radians), Math.cos(radians),
-                                centerX, centerY
-                            ),
-                            PDFLib.concatTransformationMatrix(1, 0, 0, 1, -width / 2, -height / 2)
-                        );
-                        page.drawImage(embeddedOverlayImage, {
-                            x: 0,
-                            y: 0,
-                            width: width,
-                            height: height,
-                            blendMode: PDFLib.BlendMode.Multiply,
-                            opacity: 0.93,
-                        });
-                        page.pushOperators(PDFLib.popGraphicsState());
-                    }
-                }
+            if (!stopTimes[t.stop_id]) {
+                stopTimes[t.stop_id] = [];
             }
 
-            const pdfBytes = await pdfDoc.save();
-            return pdfBytes;
-        }
+            stopTimes[t.stop_id].push(t);
 
-        document.getElementById('downloadBtn').addEventListener('click', async function() {
-            if (!isDocLoaded) return showToast("დოკუმენტი არ არის ატვირთული!", "error");
-            showLoading('მზადდება...');
-            try {
-                const pdfBytes = await generateOriginalQualityPDF();
-                if (pdfBytes) {
-                    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-                    const link = document.createElement('a');
-                    link.href = URL.createObjectURL(blob);
-                    let customName = document.getElementById('docNameInput').value.trim() || 'signed_document';
-                    link.download = `${customName}.pdf`;
-                    link.click();
-                    showToast('ფაილი გადმოწერილია', 'success');
-                }
-            } catch(err) {
-                showToast('შეცდომა: ' + err.message, 'error');
-            } finally {
-                hideLoading();
-            }
         });
 
-        document.getElementById('saveArchiveBtn').addEventListener('click', async function() {
-            if (!isDocLoaded) return showToast("არაფერია შესანახი!", "error");
-            showLoading('იტვირთება...');
-            try {
-                const pdfBytes = await generateOriginalQualityPDF();
-                const pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' });
-                let customName = document.getElementById('docNameInput').value.trim() || 'signed_document';
-                
-                let sanitizedName = customName.replace(/[^a-zA-Z0-9_-]/g, '_');
-                const fileName = `alex/${sanitizedName}_${Date.now()}.pdf`;
-                
-                const { error: storageError } = await supabaseInstance.storage
-                    .from('documents')
-                    .upload(fileName, pdfBlob, { contentType: 'application/pdf' });
-                
-                if (storageError) throw new Error("Storage შეცდომა: " + storageError.message);
+        Object.values(stopTimes).forEach(list => {
 
-                const { data: urlData } = supabaseInstance.storage
-                    .from('documents')
-                    .getPublicUrl(fileName);
+            list.sort((a, b) =>
+                timeToSeconds(a.departure_time) -
+                timeToSeconds(b.departure_time)
+            );
 
-                let thumbUrl = '';
-                const firstCanvas = document.querySelector('.pdf-page');
-                if(firstCanvas) {
-                    const thumbCanvas = document.createElement('canvas');
-                    thumbCanvas.width = 300;
-                    thumbCanvas.height = (firstCanvas.height / firstCanvas.width) * 300;
-                    const tCtx = thumbCanvas.getContext('2d');
-                    tCtx.drawImage(firstCanvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
-                    thumbUrl = thumbCanvas.toDataURL('image/jpeg', 0.8);
-                }
-
-                const { error: dbError } = await supabaseInstance
-                    .from('documents')
-                    .insert([{
-                        id: Date.now(),
-                        date: new Date().toLocaleString('ka-GE'),
-                        file_url: urlData.publicUrl,
-                        storage_path: fileName,
-                        file_size: pdfBlob.size,
-                        user_id: 'alex',
-                        doc_name: customName,
-                        thumbnail: thumbUrl
-                    }]);
-                
-                if (dbError) throw new Error("Database შეცდომა: " + dbError.message);
-                
-                showToast("წარმატებით შეინახა", "success");
-            } catch (e) {
-                showToast(e.message, "error");
-            } finally {
-                hideLoading();
-            }
         });
 
-        async function loadArchive() {
-            const grid = document.getElementById('archiveGrid');
-            grid.innerHTML = `
-                <div style="grid-column:1/-1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:60px;">
-                    ${getWritingLoaderHtml('არქივი იტვირთება...')}
-                </div>
-            `;
-            try {
-                const { data, error } = await supabaseInstance.from('documents').select('*').eq('user_id', 'alex').order('id', { ascending: false });
-                if (error) throw error;
-                archiveDataCache = data || [];
-                renderArchiveGrid(archiveDataCache);
-            } catch (e) {
-                grid.innerHTML = '<p style="color:red; grid-column:1/-1; text-align:center;">შეცდომა ბაზასთან კავშირისას.</p>';
+        displayStops(stops);
+
+        document.getElementById('status').textContent =
+            stops.length + ' Haltestellen geladen';
+
+        document.getElementById('content').innerHTML =
+            '<div class="message">' +
+            'Wähle eine Haltestelle auf der Karte oder in der Liste.' +
+            '<br><br>' +
+            'Die angezeigten Abfahrten basieren auf dem offiziellen GTFS-Fahrplan.' +
+            '</div>';
+
+    } catch(error) {
+
+        console.error(error);
+
+        document.getElementById('status').textContent =
+            'Fehler beim Laden';
+
+        document.getElementById('content').innerHTML =
+            '<div class="message">' +
+            'Die Fahrplandaten konnten nicht geladen werden. ' +
+            'Prüfe, ob die ZIP-Datei neben index.html im GitHub-Repository liegt.' +
+            '<br><br>' + error.message +
+            '</div>';
+
+    }
+
+}
+
+
+// ======================================
+// 4. DISPLAY STOPS
+// ======================================
+
+function displayStops(list) {
+
+    markers.clearLayers();
+
+    const content = document.getElementById('content');
+
+    content.innerHTML = `
+        <div class="stop-list" id="stopList"></div>
+    `;
+
+    const stopList = document.getElementById('stopList');
+
+    list.forEach(stop => {
+
+        const marker = L.circleMarker(
+            [
+                Number(stop.stop_lat),
+                Number(stop.stop_lon)
+            ],
+            {
+                radius: 5,
+                color: '#1675c5',
+                weight: 2,
+                fillColor: '#ffffff',
+                fillOpacity: 1
             }
+        );
+
+        marker.bindTooltip(stop.stop_name);
+
+        marker.on('click', () => {
+            selectStop(stop);
+        });
+
+        marker.addTo(markers);
+
+        const item = document.createElement('div');
+
+        item.className = 'stop-item';
+
+        const name = document.createElement('strong');
+        name.textContent = stop.stop_name;
+
+        const id = document.createElement('small');
+        id.textContent = stop.stop_id;
+
+        item.append(name, id);
+
+        item.onclick = () => selectStop(stop);
+
+        stopList.appendChild(item);
+
+    });
+
+}
+
+
+// ======================================
+// 5. SEARCH
+// ======================================
+
+document.getElementById('search').addEventListener(
+    'input',
+    function() {
+
+        const query = this.value.toLowerCase();
+
+        const filtered = stops.filter(s =>
+            s.stop_name.toLowerCase().includes(query)
+        );
+
+        displayStops(filtered);
+
+    }
+);
+
+
+// ======================================
+// 6. TIME FUNCTIONS
+// ======================================
+
+function timeToSeconds(time) {
+
+    const parts = time.split(':').map(Number);
+
+    return (
+        parts[0] * 3600 +
+        parts[1] * 60 +
+        (parts[2] || 0)
+    );
+
+}
+
+function currentTimeSeconds() {
+
+    const parts = new Intl.DateTimeFormat(
+        'en-GB',
+        {
+            timeZone: 'Europe/Berlin',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hourCycle: 'h23'
+        }
+    ).format(new Date()).split(':').map(Number);
+
+    return parts[0] * 3600 +
+           parts[1] * 60 +
+           parts[2];
+
+}
+
+function currentDate() {
+
+    const parts = new Intl.DateTimeFormat(
+        'en-CA',
+        {
+            timeZone: 'Europe/Berlin',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        }
+    ).formatToParts(new Date());
+
+    const values = {};
+
+    parts.forEach(p => {
+        values[p.type] = p.value;
+    });
+
+    return values.year + values.month + values.day;
+
+}
+
+function formatTime(time) {
+
+    const seconds = timeToSeconds(time);
+
+    const h = Math.floor(seconds / 3600) % 24;
+    const m = Math.floor(seconds % 3600 / 60);
+
+    return String(h).padStart(2, '0') +
+        ':' +
+        String(m).padStart(2, '0');
+
+}
+
+
+// ======================================
+// 7. ACTIVE SERVICES
+// ======================================
+
+function getActiveServices() {
+
+    const date = currentDate();
+
+    const today = new Date(
+        Number(date.substring(0,4)),
+        Number(date.substring(4,6))-1,
+        Number(date.substring(6,8))
+    );
+
+    const weekday = today.getDay();
+
+    const weekdayNames = [
+        'sunday',
+        'monday',
+        'tuesday',
+        'wednesday',
+        'thursday',
+        'friday',
+        'saturday'
+    ];
+
+    const active = new Set();
+
+    Object.values(calendar).forEach(c => {
+
+        if (
+            date >= c.start_date &&
+            date <= c.end_date &&
+            c[weekdayNames[weekday]] === '1'
+        ) {
+            active.add(c.service_id);
         }
 
-        function renderArchiveGrid(items) {
-            const grid = document.getElementById('archiveGrid');
-            grid.innerHTML = '';
-            if (!items || items.length === 0) {
-                grid.innerHTML = '<p style="color: var(--text-light); grid-column: 1/-1; text-align:center;">არქივი ცარიელია.</p>';
-                return;
-            }
+    });
 
-            items.forEach(item => {
-                const sizeText = item.file_size ? (item.file_size / 1024).toFixed(1) + ' KB' : '';
-                const docName = item.doc_name || 'დოკუმენტი';
-                const thumbHtml = item.thumbnail ? `<img src="${item.thumbnail}" alt="Preview">` : '<svg style="width:40px; height:40px; stroke:var(--text-light);" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>';
+    const dayExceptions = exceptions[date] || {};
 
-                const card = document.createElement('div');
-                card.className = 'archive-item';
-                card.onclick = () => openModal(item);
-                card.innerHTML = `
-                    <div class="archive-thumb">${thumbHtml}</div>
-                    <p style="font-size: 14px; font-weight:bold; word-break: break-all;">${docName}</p>
-                    <p style="font-size: 11px; color: var(--text-light);">${item.date} ${sizeText ? '• ' + sizeText : ''}</p>
-                `;
-                grid.appendChild(card);
-            });
+    Object.entries(dayExceptions).forEach(
+        ([service, type]) => {
+
+            if (type === 1) active.add(service);
+
+            if (type === 2) active.delete(service);
+
+        }
+    );
+
+    return active;
+
+}
+
+
+// ======================================
+// 8. SELECT STOP
+// ======================================
+
+function selectStop(stop) {
+
+    selectedStop = stop;
+
+    map.flyTo(
+        [
+            Number(stop.stop_lat),
+            Number(stop.stop_lon)
+        ],
+        16
+    );
+
+    showDepartures(stop);
+
+}
+
+
+// ======================================
+// 9. DEPARTURES
+// ======================================
+
+function showDepartures(stop) {
+
+    const content = document.getElementById('content');
+
+    content.innerHTML = `
+        <button class="back" id="backButton">
+            ← Übersicht
+        </button>
+
+        <div class="panel-title">
+            <h2>${escapeHTML(stop.stop_name)}</h2>
+            <p>Haltestelle · ${escapeHTML(stop.stop_id)}</p>
+        </div>
+
+        <div class="departures" id="departureList">
+            <div class="loading">Lade Abfahrten...</div>
+        </div>
+    `;
+
+    document.getElementById('backButton').onclick = () => {
+        selectedStop = null;
+        displayStops(stops);
+    };
+
+    const activeServices = getActiveServices();
+
+    const now = currentTimeSeconds();
+
+    const times = stopTimes[stop.stop_id] || [];
+
+    const departures = times.filter(t => {
+
+        const trip = trips[t.trip_id];
+
+        if (!trip) return false;
+
+        if (!activeServices.has(trip.service_id)) {
+            return false;
         }
 
-        function filterArchive() {
-            const query = document.getElementById('archiveSearch').value.toLowerCase();
-            const filtered = archiveDataCache.filter(item => {
-                const name = (item.doc_name || '').toLowerCase();
-                return name.includes(query);
-            });
-            renderArchiveGrid(filtered);
-        }
+        return timeToSeconds(t.departure_time) >= now;
 
-        async function openModal(item) {
-            const modal = document.getElementById('preview-modal');
-            document.getElementById('modal-title').innerText = item.doc_name || 'დოკუმენტი';
-            
-            const modalPdfContainer = document.getElementById('modal-pdf-container');
-            modalPdfContainer.innerHTML = `
-                <div style="margin: auto; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:15px;">
-                    ${getWritingLoaderHtml('იტვირთება დოკუმენტი...')}
-                </div>
-            `;
-            
-            const footerActions = document.getElementById('modal-footer-actions');
-            footerActions.innerHTML = `
-                <div style="display:flex; align-items:center; gap:8px; margin-right:auto; font-size:13px; font-weight:600; color:var(--text-light);" id="modal-doc-info">
-                    <span>გვერდი</span>
-                    <input type="number" id="modalPageInput" min="1" value="1" onchange="jumpToModalPage(this.value)" style="width:60px; padding:4px 6px; border-radius:4px; border:1px solid var(--border); font-weight:600; text-align:center;">
-                    <span>/ <span id="modal-total-pages">-</span> დან</span>
-                </div>
-                <button class="btn btn-primary" onclick="downloadArchiveDoc('${item.file_url}', '${item.doc_name || 'document'}')">
-                    <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    გადმოწერა
-                </button>
-                <button class="btn btn-danger" onclick="showDeleteConfirmation('${item.id}', '${item.storage_path}')">
-                    <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                    წაშლა
-                </button>
-            `;
-            modal.style.display = 'flex';
+    }).slice(0, 30);
 
-            try {
-                const loadingTask = pdfjsLib.getDocument(item.file_url);
-                const pdf = await loadingTask.promise;
-                currentModalPdf = pdf;
-                
-                const pageInput = document.getElementById('modalPageInput');
-                if (pageInput) {
-                    pageInput.max = pdf.numPages;
-                }
-                document.getElementById('modal-total-pages').innerText = pdf.numPages;
+    const list = document.getElementById('departureList');
 
-                modalPdfContainer.innerHTML = '';
+    if (!departures.length) {
 
-                for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-                    const pageWrapperContainer = document.createElement('div');
-                    pageWrapperContainer.id = `modal-page-${pageNum}`;
-                    pageWrapperContainer.className = 'modal-page-item';
-                    pageWrapperContainer.style.display = 'flex';
-                    pageWrapperContainer.style.flexDirection = 'column';
-                    pageWrapperContainer.style.alignItems = 'center';
-                    pageWrapperContainer.style.marginBottom = '20px';
+        list.innerHTML =
+            '<p class="message">Keine weiteren Abfahrten für heute gefunden.</p>';
 
-                    const page = await pdf.getPage(pageNum);
-                    const viewport = page.getViewport({ scale: 1.5 });
-                    const wrapper = document.createElement('div');
-                    wrapper.className = 'page-wrapper';
-                    const canvas = document.createElement('canvas');
-                    canvas.className = 'pdf-page';
-                    canvas.width = viewport.width;
-                    canvas.height = viewport.height;
-                    wrapper.appendChild(canvas);
-                    pageWrapperContainer.appendChild(wrapper);
-                    modalPdfContainer.appendChild(pageWrapperContainer);
-                    
-                    await page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
-                }
+        return;
 
-                modalPdfContainer.onscroll = function() {
-                    const pageItems = modalPdfContainer.querySelectorAll('.modal-page-item');
-                    let closestPage = 1;
-                    let minDistance = Infinity;
-                    pageItems.forEach((item, index) => {
-                        const rect = item.getBoundingClientRect();
-                        const containerRect = modalPdfContainer.getBoundingClientRect();
-                        const distance = Math.abs(rect.top - containerRect.top);
-                        if (distance < minDistance) {
-                            minDistance = distance;
-                            closestPage = index + 1;
-                        }
-                    });
-                    const input = document.getElementById('modalPageInput');
-                    if (input && document.activeElement !== input) {
-                        input.value = closestPage;
-                    }
-                };
+    }
 
-            } catch (err) {
-                modalPdfContainer.innerHTML = `<p style="color:red; margin:auto;">ვერ მოხერხდა დოკუმენტის ჩატვირთვა: ${err.message}</p>`;
-            }
-        }
+    list.innerHTML = '';
 
-        window.jumpToModalPage = function(pageNum) {
-            const total = currentModalPdf ? currentModalPdf.numPages : 1;
-            let p = parseInt(pageNum);
-            if (isNaN(p) || p < 1) p = 1;
-            if (p > total) p = total;
-            
-            const input = document.getElementById('modalPageInput');
-            if (input) input.value = p;
+    departures.forEach(d => {
 
-            const targetElement = document.getElementById(`modal-page-${p}`);
-            if (targetElement) {
-                targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        };
+        const trip = trips[d.trip_id];
 
-        window.downloadArchiveDoc = async function(url, filename) {
-            showLoading('მიმდინარეობს გადმოწერა...');
-            try {
-                const response = await fetch(url);
-                const blob = await response.blob();
-                const link = document.createElement('a');
-                link.href = URL.createObjectURL(blob);
-                link.download = `${filename}.pdf`;
-                link.click();
-                showToast('ფაილი გადმოწერილია', 'success');
-            } catch(e) {
-                showToast('გადმოწერის შეცდომა: ' + e.message, 'error');
-            } finally {
-                hideLoading();
-            }
-        };
+        const route = routes[trip.route_id] || {};
 
-        window.showDeleteConfirmation = function(id, storagePath) {
-            const footerActions = document.getElementById('modal-footer-actions');
-            footerActions.innerHTML = `
-                <div style="display:flex; align-items:center; gap:10px; margin-right:auto; font-weight:600; color:#ef4444; font-size:14px;">
-                    <span>ნამდვილად გსურთ დოკუმენტის წაშლა?</span>
-                </div>
-                <button class="btn btn-outline" onclick="openModalFromCache('${id}')">არა</button>
-                <button class="btn btn-danger" onclick="executeDeleteDoc('${id}', '${storagePath}')">დიახ, წაშლა</button>
-            `;
-        };
+        const item = document.createElement('div');
 
-        window.openModalFromCache = function(id) {
-            const item = archiveDataCache.find(d => d.id == id);
-            if(item) openModal(item);
-        };
+        item.className = 'departure';
 
-        window.executeDeleteDoc = async function(id, storagePath) {
-            showLoading('იშლება...');
-            try {
-                await supabaseInstance.from('documents').delete().eq('id', id);
-                if (storagePath) await supabaseInstance.storage.from('documents').remove([storagePath]);
-                showToast("წაიშალა", "success");
-                closeModal();
-                loadArchive();
-            } catch (e) { 
-                showToast("წაშლა ვერ მოხერხდა: " + e.message, "error"); 
-            } finally {
-                hideLoading();
-            }
-        };
+        const badge = document.createElement('div');
+        badge.className = 'route';
+        badge.textContent = route.route_short_name || '?';
 
-        window.closeModal = function() {
-            document.getElementById('preview-modal').style.display = 'none';
-            document.getElementById('modal-pdf-container').innerHTML = '';
-        }
-    </script>
+        const info = document.createElement('div');
+        info.className = 'departure-info';
+
+        const destination = document.createElement('strong');
+        destination.textContent =
+            d.stop_headsign ||
+            trip.trip_headsign ||
+            route.route_long_name ||
+            'Unbekannt';
+
+        const description = document.createElement('small');
+        description.textContent = 'Fahrplanzeit · GTFS';
+
+        info.append(destination, description);
+
+        const time = document.createElement('div');
+        time.className = 'departure-time';
+        time.textContent = formatTime(d.departure_time);
+
+        item.append(badge, info, time);
+
+        list.appendChild(item);
+
+    });
+
+}
+
+
+// ======================================
+// 10. HTML SECURITY
+// ======================================
+
+function escapeHTML(value) {
+
+    return String(value ?? '').replace(
+        /[&<>"']/g,
+        char => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        })[char]
+    );
+
+}
+
+
+// ======================================
+// START
+// ======================================
+
+loadGTFS();
+
+</script>
+
 </body>
 </html>

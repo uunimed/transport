@@ -372,7 +372,7 @@
         <!-- Refresh Button in Top-Left -->
         <div class="absolute top-3 left-14 z-[400] flex items-center gap-2 pointer-events-auto">
           <button
-            onclick="refreshMapViewData(true)"
+            onclick="refreshMapViewData()"
             class="px-3 py-1.5 rounded-xl bg-slate-900/95 hover:bg-slate-800 text-slate-200 text-xs font-bold border border-slate-700 shadow-2xl flex items-center gap-2 transition backdrop-blur-md"
           >
             <svg id="scanSpinner" class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -410,7 +410,7 @@
               <circle cx="12" cy="12" r="3" stroke-width="2"/>
               <path stroke-linecap="round" stroke-width="2" d="M12 12l6-6"/>
             </svg>
-            <span>მოძრავი ტრანსპორტი</span>
+            <span>ლაივ რეისები</span>
             <span id="radarTabBadge" class="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-800 text-slate-300">0</span>
           </button>
           <button
@@ -502,7 +502,7 @@
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
-              <span>უკან დაბრუნება (ყველა ტრანსპორტი)</span>
+              <span>უკან დაბრუნება</span>
             </button>
             <button
               onclick="fitTrackedRouteBounds()"
@@ -519,8 +519,7 @@
               </div>
               <div class="min-w-0">
                 <div class="flex items-center gap-1.5">
-                  <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                  <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-400">ლაივ მარშრუტი</span>
+                  <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-400">რეისის დეტალები</span>
                 </div>
                 <h3 id="trackDirectionTitle" class="text-sm sm:text-base font-extrabold text-white leading-tight mt-0.5 truncate">
                   მიმართულება: —
@@ -528,29 +527,10 @@
               </div>
             </div>
 
-            <div class="grid grid-cols-3 gap-2">
-              <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-2.5 text-center">
-                <div class="text-[10px] text-slate-400 uppercase">მოსვლამდე დარჩა</div>
-                <div id="trackCountdown" class="text-sm sm:text-base font-extrabold text-amber-400 font-mono mt-0.5">--:--</div>
-              </div>
-              <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-2.5 text-center">
-                <div class="text-[10px] text-slate-400 uppercase">მანძილი ხაზით</div>
-                <div id="trackDistance" class="text-sm sm:text-base font-extrabold text-blue-400 font-mono mt-0.5">-- კმ</div>
-              </div>
-              <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-2.5 text-center">
-                <div class="text-[10px] text-slate-400 uppercase">დარჩენილი გაჩერება</div>
-                <div id="trackStopsLeft" class="text-sm sm:text-base font-extrabold text-emerald-400 mt-0.5">--</div>
-              </div>
-            </div>
-
             <div class="bg-slate-950/80 rounded-xl px-3 py-2.5 text-xs space-y-1.5 border border-slate-800">
               <div class="flex items-center justify-between gap-2">
                 <span class="text-slate-400 shrink-0">სტატუსი:</span>
-                <span id="trackCurrentSegment" class="font-bold text-white text-right truncate">მოძრაობს მარშრუტზე</span>
-              </div>
-              <div class="flex items-center justify-between gap-2">
-                <span class="text-slate-400 shrink-0">სამიზნე გაჩერება:</span>
-                <span id="trackTargetStopName" class="font-bold text-yellow-400 text-right truncate">—</span>
+                <span id="trackCurrentSegment" class="font-bold text-white text-right truncate">—</span>
               </div>
             </div>
           </div>
@@ -661,6 +641,7 @@
 
   </div>
 
+  <script src="live-transit.js"></script>
   <script>
     /*************************************************************************
      * 1. SUPABASE CLIENT
@@ -679,10 +660,28 @@
      * 2. MULTI-SOURCE TRANSIT & RADAR ENGINE (MOTIS + HAFAS FALLBACK)
      *************************************************************************/
     const TRANSITOUS_BASE = 'https://api.transitous.org';
-    const HAFAS_ENDPOINTS = [
-      'https://v6.db.transport.rest',
-      'https://v5.db.transport.rest'
-    ];
+    // Optional provider of measured positions. See README.md for the response format.
+    const VEHICLE_POSITIONS_URL = '';
+    const REFRESH_MS = 30_000;
+    const displayTime = new Intl.DateTimeFormat('de-DE', {
+      timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit'
+    });
+
+    function escapeHTML(value) {
+      return String(value ?? '').replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      })[c]);
+    }
+
+    function tripClick(tripId) {
+      return encodeURIComponent(tripId).replaceAll("'", '%27');
+    }
+
+    function renderAlerts(alerts = []) {
+      return alerts.map(alert => `<p class="mt-1 text-xs text-amber-300">${escapeHTML(
+        [alert.headerText, alert.descriptionText].filter(Boolean).join(' — ')
+      )}</p>`).join('');
+    }
 
     async function safeFetchJSON(url, timeoutMs = 4500) {
       const controller = new AbortController();
@@ -692,25 +691,13 @@
           signal: controller.signal,
           headers: { 'Accept': 'application/json' }
         });
-        clearTimeout(timer);
         if (!res.ok) return null;
         return await res.json();
-      } catch (e) {
-        clearTimeout(timer);
+      } catch {
         return null;
+      } finally {
+        clearTimeout(timer);
       }
-    }
-
-    async function queryHafasRadar(north, west, south, east) {
-      for (const base of HAFAS_ENDPOINTS) {
-        const url = `${base}/radar?north=${north}&west=${west}&south=${south}&east=${east}&results=60&duration=60&frames=12&polylines=true`;
-        const data = await safeFetchJSON(url, 4000);
-        if (data) {
-          const movements = Array.isArray(data) ? data : (data.movements || []);
-          if (movements.length > 0) return movements;
-        }
-      }
-      return [];
     }
 
     /*************************************************************************
@@ -771,7 +758,13 @@
     let liveVehicleMarkers = new Map();
     let liveVehiclesState = new Map();
     let trackedTripId = null;
-    let trackedTargetStop = null;
+    let viewportRequest = 0;
+    let departuresRequest = 0;
+    let tripRequest = 0;
+    let radarStatus = 'იტვირთება ლაივ რეისები…';
+    let departuresStatus = '';
+    let stopAlerts = [];
+    let trackedLeg = null;
 
     let favoriteStops = [];
 
@@ -800,12 +793,17 @@
       await loadFavoritesFromSupabase();
       await initializeStartupStopOrGpsLocation();
 
-      setInterval(updateRealTimePositionsAndCountdowns, 800);
+      setInterval(() => {
+        initClock();
+        updateLiveMarkers();
+      }, 1000);
 
       setInterval(() => {
+        if (document.hidden) return;
         if (selectedStop) refreshSelectedStopDepartures(true);
-        refreshMapViewData(false);
-      }, 15000);
+        if (trackedTripId) refreshTrackedTrip();
+        refreshMapViewData();
+      }, REFRESH_MS);
     };
 
     async function initializeStartupStopOrGpsLocation() {
@@ -817,7 +815,7 @@
             document.getElementById('activeAreaSubtitle').textContent = `საწყისი გაჩერება: ${customStop.name}`;
             map.setView([customStop.location.latitude, customStop.location.longitude], 15);
             await selectStop(customStop, false);
-            await refreshMapViewData(false);
+            await refreshMapViewData();
             locateUserDevice(false, true);
             return;
           }
@@ -848,7 +846,7 @@
 
       streetTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
-        attribution: '© OpenStreetMap • Live Transit: MOTIS & HAFAS'
+        attribution: '© OpenStreetMap • <a href="https://transitous.org/sources/">Transitous / MOTIS</a>'
       }).addTo(map);
 
       routeOverlayLayerGroup = L.layerGroup().addTo(map);
@@ -859,9 +857,10 @@
 
       let moveTimeout = null;
       map.on('moveend', () => {
+        viewportRequest++;
         clearTimeout(moveTimeout);
         moveTimeout = setTimeout(() => {
-          refreshMapViewData(false);
+          refreshMapViewData();
         }, 350);
       });
     }
@@ -917,7 +916,7 @@
               };
               document.getElementById('activeAreaSubtitle').textContent = `უახლოესი: ${stopObj.name}`;
               await selectStop(stopObj, false);
-              await refreshMapViewData(false);
+              await refreshMapViewData();
               if (manualClick) showToast(`უახლოესი გაჩერება: ${stopObj.name}`);
               return;
             }
@@ -930,109 +929,66 @@
     }
 
     async function fallbackToDefaultLocation() {
-      const defaultStop = { id: '8011306', name: 'Chemnitz, Zentralhaltestelle', location: { latitude: 50.83230, longitude: 12.92225 } };
+      const defaultStop = { id: 'de-DELFI_de:14511:30131:1:7A', name: 'Chemnitz, Zentralhaltestelle', location: { latitude: 50.832745, longitude: 12.921385 } };
       document.getElementById('activeAreaSubtitle').textContent = defaultStop.name;
       map.setView([defaultStop.location.latitude, defaultStop.location.longitude], 15);
       await selectStop(defaultStop, false);
-      await refreshMapViewData(false);
+      await refreshMapViewData();
     }
 
     /*************************************************************************
      * 6. REFRESH MAP VIEW (MOTIS + HAFAS Radar Dual Fallback)
      *************************************************************************/
-    async function refreshMapViewData(manualTrigger = false) {
+    async function refreshMapViewData() {
+      const request = ++viewportRequest;
       const zoom = map.getZoom();
-      if (zoom < 11 && !manualTrigger) return;
-
       const spinner = document.getElementById('scanSpinner');
-      const statusText = document.getElementById('scanStatusText');
-      if (spinner) spinner.classList.add('animate-spin');
-      if (statusText) statusText.textContent = 'იტვირთება ლაივ ტრანსპორტი...';
-
-      const b = map.getBounds();
-      const min = `${b.getSouth().toFixed(4)},${b.getWest().toFixed(4)}`;
-      const max = `${b.getNorth().toFixed(4)},${b.getEast().toFixed(4)}`;
-
-      // 1. Fetch Stops
-      const stopsData = await safeFetchJSON(`${TRANSITOUS_BASE}/api/v1/map/stops?min=${min}&max=${max}`);
-      if (Array.isArray(stopsData)) {
-        stopsData.forEach(st => {
-          const stopObj = {
-            id: st.id || st.stopId,
-            name: st.name,
-            location: { latitude: st.lat || st.latitude, longitude: st.lon || st.longitude }
-          };
-          if (!loadedStopsMap.has(String(stopObj.id))) {
-            loadedStopsMap.set(String(stopObj.id), stopObj);
-            createStopMarker(stopObj);
-          }
-        });
+      const status = document.getElementById('scanStatusText');
+      if (zoom < 11) {
+        activeTripsCache.clear();
+        liveVehiclesState.clear();
+        updateLiveMarkers();
+        radarStatus = 'მოადიდე რუკა ლაივ რეისების სანახავად.';
+        status.textContent = radarStatus;
+        spinner.classList.remove('animate-spin');
+        renderRadarVehiclesList();
+        return;
       }
 
-      const nowMs = Date.now();
-      let foundTripsCount = 0;
+      spinner.classList.add('animate-spin');
+      status.textContent = 'იტვირთება ლაივ რეისები…';
+      const bounds = map.getBounds();
+      const area = `min=${bounds.getSouth().toFixed(4)},${bounds.getWest().toFixed(4)}&max=${bounds.getNorth().toFixed(4)},${bounds.getEast().toFixed(4)}`;
+      const now = Date.now();
+      const time = `startTime=${new Date(now - 120_000).toISOString()}&endTime=${new Date(now + 60_000).toISOString()}`;
+      const [stops, segments, positionData] = await Promise.all([
+        safeFetchJSON(`${TRANSITOUS_BASE}/api/v1/map/stops?${area}`),
+        safeFetchJSON(`${TRANSITOUS_BASE}/api/v5/map/trips?${area}&${time}&zoom=${zoom}`),
+        VEHICLE_POSITIONS_URL ? safeFetchJSON(`${VEHICLE_POSITIONS_URL}?${area}`) : null
+      ]);
+      if (request !== viewportRequest) return;
 
-      // 2. Try MOTIS Trips API
-      const startTime = new Date(nowMs - 120000).toISOString();
-      const endTime = new Date(nowMs + 600000).toISOString();
-      const tripsData = await safeFetchJSON(`${TRANSITOUS_BASE}/api/v5/map/trips?min=${min}&max=${max}&startTime=${startTime}&endTime=${endTime}&zoom=${zoom}`);
-
-      if (Array.isArray(tripsData) && tripsData.length > 0) {
-        tripsData.forEach(trip => {
-          if (!trip || !trip.tripId) return;
-          const polyCoords = [];
-          if (trip.geometry && Array.isArray(trip.geometry.points)) {
-            trip.geometry.points.forEach(pt => {
-              if (pt && (pt.lat !== undefined || pt.latitude !== undefined)) {
-                polyCoords.push([pt.lat ?? pt.latitude, pt.lon ?? pt.longitude]);
-              }
-            });
-          }
-
-          activeTripsCache.set(trip.tripId, {
-            tripId: trip.tripId,
-            polyCoords,
-            stopovers: Array.isArray(trip.intermediateStops) ? trip.intermediateStops : [],
-            line: { name: trip.routeShortName || trip.lineName || 'Line', product: trip.product || 'bus' },
-            direction: trip.headsign || trip.direction || '',
-            cancelled: Boolean(trip.cancelled),
-            fetchedAt: nowMs
-          });
-          foundTripsCount++;
-        });
-      }
-
-      // 3. FALLBACK: If MOTIS didn't return live vehicles for this area, query HAFAS Radar!
-      if (foundTripsCount === 0) {
-        const radarMovements = await queryHafasRadar(b.getNorth().toFixed(4), b.getWest().toFixed(4), b.getSouth().toFixed(4), b.getEast().toFixed(4));
-        if (Array.isArray(radarMovements)) {
-          radarMovements.forEach(mov => {
-            if (!mov || !mov.tripId) return;
-            const polyCoords = [];
-            if (mov.polyline && Array.isArray(mov.polyline.features)) {
-              mov.polyline.features.forEach(feat => {
-                if (feat.geometry && feat.geometry.type === 'Point') {
-                  const [lng, lat] = feat.geometry.coordinates;
-                  polyCoords.push([lat, lng]);
-                }
-              });
-            }
-
-            activeTripsCache.set(mov.tripId, {
-              tripId: mov.tripId,
-              polyCoords,
-              stopovers: Array.isArray(mov.nextStopovers) ? mov.nextStopovers : [],
-              line: mov.line || { name: 'Transit', product: 'bus' },
-              direction: mov.direction || '',
-              radarLocation: mov.location || null,
-              fetchedAt: nowMs
-            });
-          });
+      if (Array.isArray(stops)) {
+        for (const st of stops) {
+          const id = st.stopId;
+          if (!id || loadedStopsMap.has(id)) continue;
+          const stop = { id, name: st.name, location: { latitude: st.lat, longitude: st.lon } };
+          loadedStopsMap.set(id, stop);
+          createStopMarker(stop);
         }
       }
 
-      if (spinner) spinner.classList.remove('animate-spin');
-      if (statusText) statusText.textContent = `აქტიურია ${loadedStopsMap.size} გაჩერება`;
+      activeTripsCache = LiveTransit.mapTrips(Array.isArray(segments) ? segments : [], now);
+      liveVehiclesState = LiveTransit.vehiclePositions(Array.isArray(positionData?.vehicles) ? positionData.vehicles : [], Date.now());
+      updateLiveMarkers();
+      const count = activeTripsCache.size;
+      radarStatus = Array.isArray(segments)
+        ? (count ? `ლაივ რეისი: ${count}` : 'ამ არეალში ლაივ რეისი ვერ მოიძებნა.')
+        : 'ლაივ რეისების წყარო მიუწვდომელია.';
+      if (!liveVehicleMarkers.size) radarStatus += ' მანქანების პოზიციები მიუწვდომელია.';
+      status.textContent = radarStatus;
+      spinner.classList.remove('animate-spin');
+      renderRadarVehiclesList();
     }
 
     function createStopMarker(stop) {
@@ -1113,313 +1069,165 @@
 
     async function refreshSelectedStopDepartures(silent = false) {
       if (!selectedStop) return;
-
-      const listEl = document.getElementById('departuresList');
+      const request = ++departuresRequest;
       if (!silent) {
-        listEl.innerHTML = `
-          <div class="py-10 text-center space-y-3">
-            <div class="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-            <p class="text-xs text-slate-400">იტვირთება ${selectedStop.name}-ის რეალური განრიგი...</p>
-          </div>
-        `;
+        currentDepartures = [];
+        stopAlerts = [];
+        departuresStatus = 'იტვირთება ლაივ გასვლები…';
+        renderDeparturesList();
       }
-
-      const nowIso = new Date().toISOString();
-      const stoptimesData = await safeFetchJSON(`${TRANSITOUS_BASE}/api/v5/stoptimes?stopId=${encodeURIComponent(selectedStop.id)}&time=${nowIso}&n=40`);
-
-      currentDepartures = [];
-      if (Array.isArray(stoptimesData)) {
-        currentDepartures = stoptimesData.map(item => {
-          const place = item.place || item;
-          const route = item.route || place.route || {};
-          const lineName = route.shortName || route.name || item.lineName || 'Bus';
-          const product = route.product || item.product || 'bus';
-          const headsign = place.headsign || item.headsign || 'მიმართულება';
-          
-          const scheduledDep = place.scheduledDeparture || place.departure || item.scheduledDeparture;
-          const realDep = place.departure || scheduledDep;
-          const isCancelled = Boolean(place.cancelled || item.cancelled);
-          const delaySec = (new Date(realDep).getTime() - new Date(scheduledDep).getTime()) / 1000;
-
-          return {
-            tripId: item.tripId || place.tripId || `trip_${Math.random()}`,
-            line: { name: lineName, product },
-            direction: headsign,
-            when: realDep,
-            plannedWhen: scheduledDep,
-            delay: delaySec,
-            platform: place.track || place.platform || '',
-            cancelled: isCancelled
-          };
-        }).filter(dep => !dep.cancelled || new Date(dep.when).getTime() >= Date.now() - 60000);
-      }
-
-      document.getElementById('departuresCountBadge').textContent = currentDepartures.length;
-      document.getElementById('lastUpdatedTime').textContent = `განახლდა ${new Date().toLocaleTimeString('de-DE', { timeZone: 'Europe/Berlin' })}`;
-
+      const data = await safeFetchJSON(`${TRANSITOUS_BASE}/api/v5/stoptimes?stopId=${encodeURIComponent(selectedStop.id)}&n=40`);
+      if (request !== departuresRequest) return;
+      currentDepartures = LiveTransit.departures(Array.isArray(data?.stopTimes) ? data.stopTimes : []);
+      stopAlerts = data?.place?.alerts ?? [];
+      departuresStatus = Array.isArray(data?.stopTimes)
+        ? 'ამ გაჩერებაზე ლაივ გასვლის ინფორმაცია არ მოიძებნა.'
+        : 'გაჩერების ლაივ მონაცემები მიუწვდომელია.';
+      document.getElementById('lastUpdatedTime').textContent = Array.isArray(data?.stopTimes)
+        ? `განახლდა ${displayTime.format(new Date())}` : '';
       renderDeparturesList();
     }
 
     function renderDeparturesList() {
       const listEl = document.getElementById('departuresList');
-      const filtered = currentDepartures.filter(dep => {
+      if (!selectedStop) return;
+      const filtered = currentDepartures.filter(dep => enabledTransportTypes.has(getLineStyle(dep.line.name, dep.line.product).category));
+      document.getElementById('departuresCountBadge').textContent = filtered.length;
+      const rows = filtered.map(dep => {
         const style = getLineStyle(dep.line.name, dep.line.product);
-        return enabledTransportTypes.has(style.category);
-      });
-
-      if (filtered.length === 0) {
-        listEl.innerHTML = `<div class="py-10 text-center text-xs text-slate-400">ამ გაჩერებაზე ახლო მომავალში რეისი არ მოიძებნა.</div>`;
-        return;
-      }
-
-      const nowMs = Date.now();
-      listEl.innerHTML = filtered.map(dep => {
-        const style = getLineStyle(dep.line.name, dep.line.product);
-        const whenDate = new Date(dep.when);
-        const diffSec = Math.round((whenDate.getTime() - nowMs) / 1000);
-        const diffMin = Math.max(0, Math.floor(diffSec / 60));
-        const delayMin = Math.round(dep.delay / 60);
-
-        if (dep.cancelled) {
-          return `
-            <div class="p-3 rounded-xl bg-red-950/40 border border-red-500/50 opacity-75">
-              <div class="flex items-center justify-between">
-                <span class="line-through text-red-300 font-bold text-xs">${style.formattedLabel} → ${dep.direction}</span>
-                <span class="px-2 py-0.5 rounded bg-red-600 text-white font-bold text-[10px]">გაუქმებულია</span>
-              </div>
-            </div>
-          `;
-        }
-
-        let delayHtml = '';
-        if (delayMin > 0) {
-          delayHtml = `<span class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 font-bold text-[10px]">+${delayMin} წთ დაგვიანება</span>`;
-        } else if (delayMin < 0) {
-          delayHtml = `<span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold text-[10px]">${delayMin} წთ ადრე</span>`;
-        } else {
-          delayHtml = `<span class="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-semibold text-[10px]">დროულად</span>`;
-        }
-
-        const safeTripId = encodeURIComponent(dep.tripId);
-        const safeLineJson = encodeURIComponent(JSON.stringify(dep.line));
-        const safeDir = encodeURIComponent(dep.direction);
-
+        const delay = Math.round(dep.delay / 60);
+        const status = dep.cancelled ? 'რეისი გაუქმებულია' : dep.skipped ? 'გაჩერებას გამოტოვებს' :
+          !Number.isFinite(delay) ? '' : delay > 0 ? `+${delay} წთ დაგვიანება` :
+          delay < 0 ? `${Math.abs(delay)} წთ ადრე` : 'დროულად';
+        const time = Number.isFinite(Date.parse(dep.when)) && !dep.cancelled && !dep.skipped
+          ? displayTime.format(new Date(dep.when)) : '';
         return `
-          <div
-            onclick="openVehicleInSidebar('${safeTripId}', '${safeLineJson}', '${safeDir}')"
-            class="group p-3 rounded-xl border bg-slate-950/70 hover:bg-slate-800/80 border-slate-800 hover:border-blue-500/60 transition cursor-pointer"
-          >
-            <div class="flex items-center justify-between gap-2">
-              <div class="flex items-center gap-3 min-w-0">
-                <div style="color: ${style.bg};" class="font-extrabold text-xs sm:text-sm shrink-0 flex items-center gap-1.5">
-                  ${style.svg}
-                  <span>${style.formattedLabel}</span>
-                </div>
-                <div class="min-w-0 border-l border-slate-800 pl-2.5">
-                  <div class="text-xs sm:text-sm font-bold text-white truncate group-hover:text-blue-400 transition">${dep.direction}</div>
-                  <div class="flex flex-wrap items-center gap-1.5 mt-1 text-[11px] text-slate-400">
-                    <span class="font-mono text-slate-200 font-semibold">${whenDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span>
-                    ${delayHtml}
-                    ${dep.platform ? `<span class="px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 text-[10px]">ბაქანი ${dep.platform}</span>` : ''}
-                  </div>
-                </div>
-              </div>
-              <div class="text-right shrink-0">
-                <span class="text-base font-extrabold text-white font-mono">${diffMin} <span class="text-xs font-normal text-slate-400">წთ</span></span>
-              </div>
-            </div>
-          </div>
-        `;
-      }).join('');
+          <button type="button" onclick="openVehicleInSidebar('${tripClick(dep.tripId)}')"
+            class="block w-full text-left p-3 rounded-xl border border-slate-800 bg-slate-950/70 hover:bg-slate-800">
+            <span style="color:${style.bg}" class="font-bold">${style.svg} ${escapeHTML(style.formattedLabel)}</span>
+            <span class="text-xs text-white">${escapeHTML(dep.direction)}</span>
+            <span class="block text-xs text-slate-300 mt-1">
+              ${[time, status, dep.platform && `${dep.platformChanged ? 'ახალი ბაქანი' : 'ბაქანი'} ${escapeHTML(dep.platform)}`].filter(Boolean).join(' · ')}
+            </span>
+            ${renderAlerts(dep.alerts)}
+          </button>`;
+      }).join('') || `<div class="py-10 text-center text-xs text-slate-400">${departuresStatus}</div>`;
+      listEl.innerHTML = renderAlerts(stopAlerts) + rows;
     }
 
     /*************************************************************************
-     * 8. REAL-TIME GPS INTERPOLATION & TRACKING ON MAP
+     * 8. MEASURED VEHICLE POSITIONS
      *************************************************************************/
-    function updateRealTimePositionsAndCountdowns() {
-      const nowMs = Date.now();
-
-      const clockEl = document.getElementById('deClock');
-      if (clockEl) {
-        clockEl.textContent = new Date().toLocaleTimeString('de-DE', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    function updateLiveMarkers() {
+      const now = Date.now();
+      for (const [id, position] of liveVehiclesState) {
+        if (now - position.observedAt > LiveTransit.MAX_POSITION_AGE_MS) liveVehiclesState.delete(id);
       }
-
-      const bounds = map ? map.getBounds().pad(0.3) : null;
-      let activeCount = 0;
-
-      activeTripsCache.forEach((entry, tripId) => {
-        if (entry.cancelled) return;
-        const style = getLineStyle(entry.line.name, entry.line.product);
-        if (!enabledTransportTypes.has(style.category)) return;
-
-        const posInfo = computeTripPosition(entry, nowMs);
-        if (posInfo && bounds && (bounds.contains([posInfo.lat, posInfo.lng]) || trackedTripId === tripId)) {
-          activeCount++;
-          liveVehiclesState.set(tripId, posInfo);
-          if (!trackedTripId || trackedTripId === tripId) {
-            renderOrUpdateVehicleMarker(tripId, entry, posInfo);
-          }
-        } else {
-          if (liveVehicleMarkers.has(tripId)) {
-            vehiclesLayerGroup.removeLayer(liveVehicleMarkers.get(tripId));
-            liveVehicleMarkers.delete(tripId);
-          }
-          liveVehiclesState.delete(tripId);
+      const visible = new Set();
+      const bounds = map.getBounds();
+      for (const [id, position] of liveVehiclesState) {
+        const trip = activeTripsCache.get(id);
+        if (!trip || (trackedTripId === id && trackedLeg?.cancelled) ||
+            !bounds.contains([position.lat, position.lng])) continue;
+        const style = getLineStyle(trip.line.name, trip.line.product);
+        if (!enabledTransportTypes.has(style.category)) continue;
+        visible.add(id);
+        if (liveVehicleMarkers.has(id)) {
+          liveVehicleMarkers.get(id).setLatLng([position.lat, position.lng]);
+          continue;
         }
-      });
-
-      const badge = document.getElementById('radarTabBadge');
-      if (badge) badge.textContent = activeCount;
-
-      if (trackedTripId && activeTripsCache.has(trackedTripId)) {
-        updateTrackedVehicleRouteOverlay(nowMs, false);
+        const icon = L.divIcon({
+          className: 'vehicle-marker-container', iconSize: [0, 0],
+          html: `<div class="vehicle-pill" style="background-color:${style.bg}">${style.svg} ${escapeHTML(style.formattedLabel)}</div>`
+        });
+        const marker = L.marker([position.lat, position.lng], { icon }).addTo(vehiclesLayerGroup);
+        marker.on('click', () => openVehicleInSidebar(tripClick(id)));
+        liveVehicleMarkers.set(id, marker);
       }
-
-      if (!document.getElementById('tabContentRadar').classList.contains('hidden')) {
-        renderRadarVehiclesList();
+      for (const [id, marker] of liveVehicleMarkers) {
+        if (visible.has(id)) continue;
+        vehiclesLayerGroup.removeLayer(marker);
+        liveVehicleMarkers.delete(id);
       }
-    }
-
-    function computeTripPosition(entry, nowMs) {
-      if (entry.radarLocation && entry.radarLocation.latitude) {
-        return {
-          lat: entry.radarLocation.latitude,
-          lng: entry.radarLocation.longitude,
-          statusText: entry.direction ? `მიემართება: ${entry.direction}` : 'მოძრაობს'
-        };
-      }
-
-      const stops = entry.stopovers || [];
-      if (stops.length < 2 || entry.polyCoords.length < 2) return null;
-
-      for (let i = 0; i < stops.length - 1; i++) {
-        const curr = stops[i];
-        const next = stops[i + 1];
-
-        const depTime = curr.departure || curr.scheduledDeparture || curr.time;
-        const arrTime = next.arrival || next.scheduledArrival || next.time;
-        if (!depTime || !arrTime) continue;
-
-        const depMs = new Date(depTime).getTime();
-        const arrMs = new Date(arrTime).getTime();
-
-        if (nowMs >= depMs && nowMs <= arrMs) {
-          const duration = Math.max(1000, arrMs - depMs);
-          const progress = Math.min(1, Math.max(0, (nowMs - depMs) / duration));
-          const pt = interpolateAlongPolyline(entry.polyCoords, progress);
-          return {
-            lat: pt.lat,
-            lng: pt.lng,
-            statusText: `${curr.name || ''} → ${next.name || ''}`
-          };
-        }
-      }
-
-      // If outside stop times but polyline exists, place vehicle at start of polyline
-      if (entry.polyCoords.length > 0) {
-        return {
-          lat: entry.polyCoords[0][0],
-          lng: entry.polyCoords[0][1],
-          statusText: entry.direction || 'მოძრაობს'
-        };
-      }
-
-      return null;
-    }
-
-    function interpolateAlongPolyline(coords, fraction) {
-      if (!coords || coords.length === 0) return { lat: 50.8322, lng: 12.9225 };
-      if (fraction <= 0) return { lat: coords[0][0], lng: coords[0][1] };
-      if (fraction >= 1) return { lat: coords[coords.length - 1][0], lng: coords[coords.length - 1][1] };
-
-      const segLengths = [];
-      let totalLen = 0;
-      for (let i = 0; i < coords.length - 1; i++) {
-        const d = haversineMeters(coords[i][0], coords[i][1], coords[i + 1][0], coords[i + 1][1]);
-        segLengths.push(d);
-        totalLen += d;
-      }
-      if (totalLen === 0) return { lat: coords[0][0], lng: coords[0][1] };
-
-      const target = totalLen * fraction;
-      let acc = 0;
-      for (let i = 0; i < segLengths.length; i++) {
-        if (acc + segLengths[i] >= target) {
-          const localFrac = segLengths[i] > 0 ? (target - acc) / segLengths[i] : 0;
-          return {
-            lat: coords[i][0] + (coords[i + 1][0] - coords[i][0]) * localFrac,
-            lng: coords[i][1] + (coords[i + 1][1] - coords[i][1]) * localFrac
-          };
-        }
-        acc += segLengths[i];
-      }
-      return { lat: coords[coords.length - 1][0], lng: coords[coords.length - 1][1] };
-    }
-
-    function renderOrUpdateVehicleMarker(tripId, entry, posInfo) {
-      const style = getLineStyle(entry.line.name, entry.line.product);
-      const isTracked = trackedTripId === tripId;
-
-      const html = `
-        <div style="background-color: ${style.bg};" class="vehicle-pill ${isTracked ? 'tracked' : ''}">
-          <span class="vehicle-live-dot"></span>
-          ${style.svg}
-          <span>${style.formattedLabel}</span>
-        </div>
-      `;
-
-      if (liveVehicleMarkers.has(tripId)) {
-        const marker = liveVehicleMarkers.get(tripId);
-        marker.setLatLng([posInfo.lat, posInfo.lng]);
-      } else {
-        const marker = L.marker([posInfo.lat, posInfo.lng], {
-          icon: L.divIcon({ className: 'vehicle-marker-container', html, iconSize: [0, 0] })
-        }).addTo(vehiclesLayerGroup);
-
-        marker.on('click', () => openVehicleInSidebar(encodeURIComponent(tripId), encodeURIComponent(JSON.stringify(entry.line)), encodeURIComponent(entry.direction)));
-        liveVehicleMarkers.set(tripId, marker);
+      if (trackedTripId && trackedLeg && !trackedLeg.cancelled) {
+        document.getElementById('trackCurrentSegment').textContent = liveVehicleMarkers.has(trackedTripId)
+          ? 'მდებარეობა განახლებულია' : 'მანქანის მდებარეობა მიუწვდომელია';
       }
     }
 
     /*************************************************************************
      * 9. IN-PLACE VEHICLE ROUTE INSPECTION
      *************************************************************************/
-    async function openVehicleInSidebar(encodedTripId, encodedLineJson, encodedDirection) {
-      const tripId = decodeURIComponent(encodedTripId);
-      trackedTripId = tripId;
-
+    async function openVehicleInSidebar(encodedTripId) {
+      trackedTripId = decodeURIComponent(encodedTripId);
+      trackedLeg = null;
+      routeOverlayLayerGroup.clearLayers();
       document.getElementById('sidebarTabsBar').classList.add('hidden');
       ['Departures', 'Radar', 'Favorites'].forEach(t => document.getElementById('tabContent' + t).classList.add('hidden'));
       document.getElementById('tabContentVehicleDetails').classList.remove('hidden');
-
-      const entry = activeTripsCache.get(tripId);
-      if (!entry) return;
-
-      document.getElementById('trackDirectionTitle').textContent = `მიმართულება: ${entry.direction}`;
-      document.getElementById('trackStopsTimeline').innerHTML = (entry.stopovers || []).map((st, idx) => `
-        <div class="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-slate-200">
-          <span>${idx + 1}. ${st.name || st.stop?.name || 'გაჩერება'}</span>
-          <span class="font-mono text-xs text-blue-400">${st.departure ? new Date(st.departure).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : ''}</span>
-        </div>
-      `).join('');
-
-      updateTrackedVehicleRouteOverlay(Date.now(), true);
+      document.getElementById('trackLineBadge').textContent = '—';
+      document.getElementById('trackDirectionTitle').textContent = 'იტვირთება მარშრუტი…';
+      document.getElementById('trackCurrentSegment').textContent = '—';
+      document.getElementById('trackStopsTimeline').replaceChildren();
+      await refreshTrackedTrip(true);
     }
 
-    function updateTrackedVehicleRouteOverlay(nowMs, fitBounds = false) {
-      const entry = activeTripsCache.get(trackedTripId);
-      if (!entry || !entry.polyCoords.length) return;
+    async function refreshTrackedTrip(fitBounds = false) {
+      const request = ++tripRequest;
+      const id = trackedTripId;
+      const data = await safeFetchJSON(`${TRANSITOUS_BASE}/api/v5/trip?tripId=${encodeURIComponent(id)}`);
+      if (request !== tripRequest || id !== trackedTripId) return;
 
+      const leg = Array.isArray(data?.legs) ? data.legs.find(leg => leg.tripId === id) : null;
       routeOverlayLayerGroup.clearLayers();
-      L.polyline(entry.polyCoords, { color: '#3b82f6', weight: 6, opacity: 0.8, className: 'animated-route-line' }).addTo(routeOverlayLayerGroup);
-
-      if (fitBounds) {
-        map.fitBounds(L.polyline(entry.polyCoords).getBounds(), { padding: [50, 50] });
+      trackedLeg = leg?.realTime || leg?.cancelled ? leg : null;
+      if (!trackedLeg) {
+        document.getElementById('trackCurrentSegment').textContent = 'რეისის ლაივ მონაცემები მიუწვდომელია';
+        document.getElementById('trackDirectionTitle').textContent = leg?.headsign || 'მარშრუტი';
+        document.getElementById('trackStopsTimeline').replaceChildren();
+        return;
       }
+      document.getElementById('trackLineBadge').textContent = leg.displayName || leg.mode;
+      document.getElementById('trackDirectionTitle').textContent = leg.headsign || leg.to?.name || 'მარშრუტი';
+      document.getElementById('trackCurrentSegment').textContent = leg.cancelled
+        ? 'რეისი გაუქმებულია' : 'მანქანის მდებარეობა მიუწვდომელია';
+      if (leg.cancelled) {
+        activeTripsCache.delete(id);
+        liveVehiclesState.delete(id);
+        updateLiveMarkers();
+        renderRadarVehiclesList();
+      }
+      const stops = [leg.from, ...(leg.intermediateStops ?? []), leg.to].filter(Boolean);
+      document.getElementById('trackStopsTimeline').innerHTML = renderAlerts(leg.alerts) + stops.map(stop => {
+        const time = stop.departure ?? stop.arrival;
+        const reason = stop.departure ? stop.departureTimestampReason : stop.arrivalTimestampReason;
+        const status = stop.cancelled ? 'გაჩერებას გამოტოვებს' :
+          reason && !['NO_RT_DATA', 'INCONSISTENT_RT'].includes(reason) && Number.isFinite(Date.parse(time))
+          ? displayTime.format(new Date(time)) : '';
+        const platform = stop.track && stop.scheduledTrack && stop.track !== stop.scheduledTrack
+          ? `ახალი ბაქანი ${escapeHTML(stop.track)}` : '';
+        return `<div class="px-3 py-2 rounded-xl bg-slate-950/70 border border-slate-800">
+          <span>${escapeHTML(stop.name)}</span>
+          <span class="text-blue-400 ml-2">${[status, platform].filter(Boolean).join(' · ')}</span>
+          ${renderAlerts(stop.alerts)}
+        </div>`;
+      }).join('');
+      if (!leg.cancelled) {
+        const geometry = leg.legGeometry;
+        const coords = LiveTransit.decodePolyline(geometry?.points, geometry?.precision);
+        if (coords.length > 1) L.polyline(coords, { color: '#3b82f6', weight: 6, opacity: 0.8 }).addTo(routeOverlayLayerGroup);
+      }
+      if (fitBounds) fitTrackedRouteBounds();
+    }
+
+    function fitTrackedRouteBounds() {
+      const route = routeOverlayLayerGroup.getLayers()[0];
+      if (route) map.fitBounds(route.getBounds(), { padding: [50, 50] });
     }
 
     function clearTrackedTrip(restoreTab = true) {
       trackedTripId = null;
+      trackedLeg = null;
       routeOverlayLayerGroup.clearLayers();
       document.getElementById('tabContentVehicleDetails').classList.add('hidden');
       document.getElementById('sidebarTabsBar').classList.remove('hidden');
@@ -1451,25 +1259,18 @@
     }
 
     function renderRadarVehiclesList() {
-      const container = document.getElementById('radarVehiclesList');
-      const entries = Array.from(activeTripsCache.values()).filter(e => !e.cancelled);
-      if (entries.length === 0) {
-        container.innerHTML = `<div class="py-10 text-center text-xs text-slate-400">მოძრავი ტრანსპორტი იტვირთება...</div>`;
-        return;
-      }
-
-      container.innerHTML = entries.map(entry => {
-        const style = getLineStyle(entry.line.name, entry.line.product);
-        return `
-          <div onclick="openVehicleInSidebar('${encodeURIComponent(entry.tripId)}', '${encodeURIComponent(JSON.stringify(entry.line))}', '${encodeURIComponent(entry.direction)}')" class="p-3 rounded-xl bg-slate-950/80 hover:bg-slate-800 border border-slate-800 cursor-pointer flex items-center justify-between transition">
-            <div class="flex items-center gap-3">
-              <span style="color:${style.bg}" class="font-extrabold text-xs flex items-center gap-1">${style.svg} ${style.formattedLabel}</span>
-              <span class="text-xs text-white">${entry.direction}</span>
-            </div>
-            <span class="text-xs text-blue-400">მარშრუტი →</span>
-          </div>
-        `;
-      }).join('');
+      const entries = [...activeTripsCache.values()].filter(entry =>
+        enabledTransportTypes.has(getLineStyle(entry.line.name, entry.line.product).category));
+      document.getElementById('radarTabBadge').textContent = entries.length;
+      document.getElementById('radarVehiclesList').innerHTML =
+        `<p class="p-2 text-xs text-slate-400">${radarStatus}</p>` + entries.map(entry => {
+          const style = getLineStyle(entry.line.name, entry.line.product);
+          return `<button type="button" onclick="openVehicleInSidebar('${tripClick(entry.tripId)}')"
+            class="block w-full text-left p-3 rounded-xl bg-slate-950/80 hover:bg-slate-800 border border-slate-800">
+            <span style="color:${style.bg}" class="font-bold">${style.svg} ${escapeHTML(style.formattedLabel)}</span>
+            <span class="text-xs text-white">${escapeHTML(entry.direction)}</span>
+          </button>`;
+        }).join('');
     }
 
     /*************************************************************************
@@ -1515,7 +1316,7 @@
       document.getElementById('stopSearchInput').value = stop.name;
       map.setView([stop.location.latitude, stop.location.longitude], 16);
       await selectStop(stop, false);
-      await refreshMapViewData(false);
+      await refreshMapViewData();
     }
 
     async function loadFavoritesFromSupabase() {
@@ -1577,8 +1378,10 @@
       } else enabledTransportTypes.add(cat);
       updateTransportTypeSettingsUI();
       renderDeparturesList();
+      renderRadarVehiclesList();
+      updateLiveMarkers();
     }
-    function enableAllTransportTypes() { enabledTransportTypes = new Set(['tram', 'bus', 'suburban', 'regional']); updateTransportTypeSettingsUI(); renderDeparturesList(); }
+    function enableAllTransportTypes() { enabledTransportTypes = new Set(['tram', 'bus', 'suburban', 'regional']); updateTransportTypeSettingsUI(); renderDeparturesList(); renderRadarVehiclesList(); updateLiveMarkers(); }
     function updateTransportTypeSettingsUI() {
       ['tram', 'bus', 'suburban', 'regional'].forEach(k => {
         const btn = document.getElementById(`typeToggle-${k}`);

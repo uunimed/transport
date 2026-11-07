@@ -1349,92 +1349,6 @@ create policy "Allow public read/write favorite_stops"
       }
     }
 
-    // Ensures ANY stop clicked anywhere in Germany (even small side-street bus stops) has realistic live incoming vehicles & street routes
-    function ensureDynamicTripsForStop(stop, nowMs) {
-      // Check if stop already has trips in activeTripsCache
-      let countForStop = 0;
-      activeTripsCache.forEach(entry => {
-        if (entry.stopovers.some(s => String(s.stop?.id) === String(stop.id) || s.stop?.name === stop.name)) {
-          countForStop++;
-        }
-      });
-      if (countForStop >= 4) return;
-
-      // Find nearby stops to form a realistic local street corridor through `stop`
-      const nearby = Array.from(loadedStopsMap.values())
-        .filter(s => String(s.id) !== String(stop.id) && s.location)
-        .map(s => ({
-          stop: s,
-          dist: haversineMeters(stop.location.latitude, stop.location.longitude, s.location.latitude, s.location.longitude)
-        }))
-        .sort((a, b) => a.dist - b.dist)
-        .slice(0, 6)
-        .map(x => x.stop);
-
-      if (nearby.length < 2) return;
-
-      const localRouteStops = [
-        nearby[1],
-        nearby[0],
-        stop,
-        nearby[2] || nearby[0],
-        nearby[3] || nearby[1]
-      ].filter(Boolean);
-
-      const localLines = [
-        { name: 'Bus 32', product: 'bus', headway: 12 },
-        { name: 'Tram 2', product: 'tram', headway: 10 },
-        { name: 'Bus 62', product: 'bus', headway: 15 }
-      ];
-
-      const basePeriodMs = Math.floor(nowMs / 1800000) * 1800000;
-
-      localLines.forEach((lDef, lIdx) => {
-        for (let k = -1; k <= 4; k++) {
-          const startMs = basePeriodMs + (k * lDef.headway + lIdx * 4) * 60000;
-          const tripId = `LOCAL|${stop.id}|${lDef.name}|${startMs}`;
-          if (activeTripsCache.has(tripId)) continue;
-
-          const polyCoords = [];
-          const stopovers = [];
-          localRouteStops.forEach((stObj, idx) => {
-            const pIdx = polyCoords.length;
-            polyCoords.push([stObj.location.latitude, stObj.location.longitude]);
-            // Add midpoint for smooth street interpolation
-            if (idx < localRouteStops.length - 1) {
-              const nxt = localRouteStops[idx + 1];
-              polyCoords.push([
-                (stObj.location.latitude + nxt.location.latitude) / 2 + 0.0004,
-                (stObj.location.longitude + nxt.location.longitude) / 2 - 0.0003
-              ]);
-            }
-            const tMs = startMs + idx * 3 * 60000;
-            stopovers.push({
-              stop: stObj,
-              stopIndex: idx,
-              polyIndex: pIdx,
-              plannedArrival: new Date(tMs).toISOString(),
-              arrival: new Date(tMs).toISOString(),
-              plannedDeparture: new Date(tMs + 15000).toISOString(),
-              departure: new Date(tMs + 15000).toISOString(),
-              delay: 0,
-              platform: '1'
-            });
-          });
-
-          activeTripsCache.set(tripId, {
-            tripId,
-            polyCoords,
-            stopovers,
-            line: { name: lDef.name, product: lDef.product },
-            direction: localRouteStops[localRouteStops.length - 1].name.replace(/^Chemnitz\s+/i, ''),
-            fetchedAt: nowMs,
-            isSynchronizedGTFS: true
-          });
-        }
-      });
-    }
-
     /*************************************************************************
      * 7. LEAFLET MAP SETUP WITH STRICT GERMANY BOUNDS & DARKENED WORLD MASK
      *************************************************************************/
@@ -2176,15 +2090,6 @@ create policy "Allow public read/write favorite_stops"
         }
       });
 
-      // 3. Compute exact street position for every active trip
-      let activeCount = 0;
-      activeTripsCache.forEach((entry, tripId) => {
-        const posInfo = computeVehicleRealTimePosition(entry, nowMs);
-        if (posInfo) {
-          activeCount++;
-          liveVehiclesState.set(tripId, posInfo);
-          renderOrUpdateVehicleMarker(tripId, entry, posInfo);
-        } else {
       // 3. Compute exact street position for every active trip (filtered by Settings)
       let activeCount = 0;
       activeTripsCache.forEach((entry, tripId) => {
@@ -2751,7 +2656,8 @@ create policy "Allow public read/write favorite_stops"
               location: { latitude: row.latitude, longitude: row.longitude }
             }));
             localStorage.setItem('de_transit_fav_stops', JSON.stringify(favoriteStops));
-            document.getElementById('supabaseStatusDot').className = 'w-2 h-2 rounded-full bg-emerald-400';
+            const dotEl = document.getElementById('supabaseStatusDot');
+            if (dotEl) dotEl.className = 'w-2 h-2 rounded-full bg-emerald-400';
           }
         } catch (err) {
           console.log('Supabase table not created yet; using local storage sync.');

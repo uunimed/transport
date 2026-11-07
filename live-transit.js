@@ -1,6 +1,17 @@
 (function (root) {
   const MAX_POSITION_AGE_MS = 90_000;
 
+  function pathDistances(points) {
+    const distances = [0];
+    for (let i = 1; i < points.length; i++) {
+      const [lat, lng] = points[i];
+      const [previousLat, previousLng] = points[i - 1];
+      const longitudeScale = Math.cos((lat + previousLat) * Math.PI / 360);
+      distances.push(distances[i - 1] + Math.hypot(lat - previousLat, (lng - previousLng) * longitudeScale));
+    }
+    return distances;
+  }
+
   function mapTrips(segments, now = Date.now()) {
     const trips = new Map();
     for (const segment of segments) {
@@ -8,17 +19,11 @@
       const arrival = Date.parse(segment.arrival);
       if (segment.realTime !== true || segment.cancelled ||
           !Number.isFinite(departure) || !Number.isFinite(arrival) ||
-          departure > now + 60_000 || arrival < now || departure > arrival) continue;
+          departure > now + 120_000 || arrival < now - 180_000 || departure > arrival) continue;
 
       const points = decodePolyline(segment.polyline);
-      const distances = [0];
-      for (let i = 1; i < points.length; i++) {
-        const [lat, lng] = points[i];
-        const [previousLat, previousLng] = points[i - 1];
-        const longitudeScale = Math.cos((lat + previousLat) * Math.PI / 360);
-        distances.push(distances[i - 1] + Math.hypot(lat - previousLat, (lng - previousLng) * longitudeScale));
-      }
-      const leg = { departure, arrival, points, distances };
+      const distances = pathDistances(points);
+      const leg = { departure, arrival, points, distances, from: segment.from, to: segment.to };
       for (const trip of segment.trips ?? []) {
         if (!trip.tripId || trip.cancelled) continue;
         if (!trips.has(trip.tripId)) {
@@ -32,17 +37,31 @@
         trips.get(trip.tripId).legs.push(leg);
       }
     }
-    for (const trip of trips.values()) trip.legs.sort((a, b) => b.departure - a.departure);
+    for (const trip of trips.values()) trip.legs.sort((a, b) => a.departure - b.departure);
     return trips;
   }
 
   function estimatedPosition(trip, now = Date.now()) {
-    const leg = trip.legs.find(leg => leg.departure <= now && now <= leg.arrival);
-    if (!leg?.points.length) return null;
+    const next = trip.legs.findIndex(leg => leg.departure > now);
+    const previous = trip.legs[next < 0 ? trip.legs.length - 1 : next - 1];
+    const upcoming = trip.legs[next];
+    if (!previous) return null;
+    if (now >= previous.arrival) {
+      const sameStop = upcoming && (previous.to?.stopId
+        ? previous.to.stopId === upcoming.from?.stopId
+        : previous.to?.name && previous.to.name === upcoming.from?.name);
+      if ((sameStop || now - previous.arrival <= 25_000) &&
+          Number.isFinite(previous.to?.lat) && Number.isFinite(previous.to?.lon)) {
+        return { lat: previous.to.lat, lng: previous.to.lon, from: previous.to, to: upcoming?.to, stopped: true };
+      }
+      return null;
+    }
+    const leg = previous;
+    if (!leg.points.length) return null;
     const { departure, arrival, points, distances } = leg;
     const progress = arrival > departure ? (now - departure) / (arrival - departure) : 0;
     const target = progress * distances.at(-1);
-    if (!target) return { lat: points[0][0], lng: points[0][1] };
+    if (!target) return { lat: points[0][0], lng: points[0][1], from: leg.from, to: leg.to };
 
     const end = distances.findIndex(distance => distance >= target);
     const fraction = (target - distances[end - 1]) / (distances[end] - distances[end - 1]);
@@ -50,7 +69,8 @@
     const [toLat, toLng] = points[end];
     return {
       lat: fromLat + fraction * (toLat - fromLat),
-      lng: fromLng + fraction * (toLng - fromLng)
+      lng: fromLng + fraction * (toLng - fromLng),
+      from: leg.from, to: leg.to
     };
   }
 
@@ -70,6 +90,9 @@
         line: { name: item.displayName || item.routeShortName || item.mode, product: item.mode },
         direction: item.headsign || item.tripTo?.name || '',
         when,
+        scheduledWhen: place.scheduledDeparture,
+        arrival: place.arrival,
+        stopId: place.stopId,
         delay,
         platform: place.track,
         platformChanged,
@@ -105,6 +128,85 @@
     return coords;
   }
 
+  function routeProgress(leg, targetId, targetTime) {
+    const stops = [leg.from, ...(leg.intermediateStops ?? []), leg.to].filter(Boolean);
+    const points = decodePolyline(leg.legGeometry?.points, leg.legGeometry?.precision);
+    const matching = stops.map((stop, index) => ({ stop, index }))
+      .filter(({ stop }) => targetId && (stop.stopId === targetId || stop.parentId === targetId));
+    const target = matching.reduce((best, item) => {
+      if (!best) return item;
+      const difference = stop => Math.abs(Date.parse(stop.departure ?? stop.arrival) - targetTime);
+      return difference(item.stop) < difference(best.stop) ? item : best;
+    }, null)?.index ?? -1;
+    const projected = [];
+    let start = 0;
+    for (const stop of stops) {
+      let best = start;
+      let distance = Infinity;
+      for (let i = start; i < points.length; i++) {
+        const d = (points[i][0] - stop.lat) ** 2 + (points[i][1] - stop.lon) ** 2;
+        if (d < distance) {
+          best = i;
+          distance = d;
+          if (d < 1e-11) break;
+        }
+      }
+      projected.push(best);
+      start = best;
+    }
+    return { stops, points, projected, target };
+  }
+
+  function hasLiveTime(reason) {
+    return Boolean(reason && !['NO_RT_DATA', 'INCONSISTENT_RT'].includes(reason));
+  }
+
+  function positionOnRoute(route, now) {
+    const { stops, points, projected } = route;
+    if (!points.length) return null;
+    let fromIndex = -1;
+    for (let index = 0; index < stops.length; index++) {
+      const stop = stops[index];
+      if (stop.cancelled) continue;
+      const arrival = Date.parse(stop.arrival);
+      const departure = Date.parse(stop.departure);
+      if (hasLiveTime(stop.arrivalTimestampReason) && hasLiveTime(stop.departureTimestampReason) &&
+          arrival <= now && now < departure) {
+        return { lat: stop.lat, lng: stop.lon, from: stop, to: stops.slice(index + 1).find(next => !next.cancelled), stopped: true };
+      }
+      if (fromIndex >= 0) {
+        const from = stops[fromIndex];
+        const start = Date.parse(from.departure);
+        if (hasLiveTime(from.departureTimestampReason) && hasLiveTime(stop.arrivalTimestampReason) &&
+            start <= now && now < arrival) {
+          const section = points.slice(projected[fromIndex], projected[index] + 1);
+          const distances = pathDistances(section);
+          return estimatedPosition({ legs: [{ departure: start, arrival, from, to: stop, points: section, distances }] }, now);
+        }
+      }
+      fromIndex = index;
+    }
+    return null;
+  }
+
+  function remainingRoute(route, position, currentStop) {
+    const { points, projected, target } = route;
+    if (!position || !points.length || target < 0 || currentStop >= target) return [];
+    const start = projected[Math.max(0, currentStop)];
+    const limit = projected[target];
+    const end = Math.min(limit, projected[currentStop + 1] ?? limit);
+    let nearest = start;
+    let best = Infinity;
+    for (let i = start; i <= end; i++) {
+      const distance = (points[i][0] - position.lat) ** 2 + (points[i][1] - position.lng) ** 2;
+      if (distance < best) {
+        nearest = i;
+        best = distance;
+      }
+    }
+    return [[position.lat, position.lng], ...points.slice(nearest, limit + 1)];
+  }
+
   function vehiclePositions(items, now = Date.now()) {
     const positions = new Map();
     for (const item of items) {
@@ -120,7 +222,7 @@
     return positions;
   }
 
-  const api = { mapTrips, estimatedPosition, departures, decodePolyline, vehiclePositions, MAX_POSITION_AGE_MS };
+  const api = { hasLiveTime, positionOnRoute, routeProgress, remainingRoute, mapTrips, estimatedPosition, departures, decodePolyline, vehiclePositions, MAX_POSITION_AGE_MS };
   if (typeof module === 'object') module.exports = api;
   else root.LiveTransit = api;
 })(globalThis);

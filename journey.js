@@ -9,6 +9,11 @@ function initializeJourneyPlanner() {
   setupStopPicker('journeyTo', 'journeyToOptions', stop => changeJourneyEndpoint('to', stop));
   document.getElementById('journeyForm').addEventListener('submit', findJourneys);
   document.getElementById('journeyTimeMode').addEventListener('change', updateJourneyTimePicker);
+  for (const id of ['journeyHour', 'journeyMinute']) {
+    const input = document.getElementById(id);
+    input.addEventListener('input', () => { input.value = input.value.replace(/\D/g, '').slice(0, 2); });
+    input.addEventListener('blur', () => { if (input.value) input.value = input.value.padStart(2, '0'); });
+  }
   updateJourneyTimePicker();
   document.getElementById('journeyForm').querySelector('button[type=submit]').disabled = false;
   setInterval(() => {
@@ -72,11 +77,24 @@ function useJourneyOriginLocation() {
 
 function updateJourneyTimePicker() {
   const mode = document.getElementById('journeyTimeMode').value;
-  const field = document.getElementById('journeyDateTime');
-  document.getElementById('journeyTimePicker').classList.toggle('hidden', mode === 'now');
-  field.disabled = mode === 'now';
-  field.required = mode !== 'now';
-  if (!field.disabled && !field.value) field.value = LiveTransit.berlinLocal(Date.now() + 30 * 60_000);
+  const fields = ['journeyDate', 'journeyHour', 'journeyMinute'].map(id => document.getElementById(id));
+  const show = mode !== 'now';
+  document.getElementById('journeyTimePicker').classList.toggle('hidden', !show);
+  const [date, hour, minute] = LiveTransit.berlinLocal(Date.now()).split(/T|:/);
+  fields.forEach((field, index) => {
+    field.disabled = !show;
+    field.required = show;
+    if (show && !field.value) field.value = [date, hour, minute][index];
+  });
+}
+
+function selectedJourneyTime(mode) {
+  if (mode === 'now') return Date.now();
+  const date = document.getElementById('journeyDate').value;
+  const hour = document.getElementById('journeyHour').value;
+  const minute = document.getElementById('journeyMinute').value;
+  if (!date || !hour || !minute) return NaN;
+  return LiveTransit.berlinInstant(`${date}T${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`);
 }
 
 async function findJourneys(event) {
@@ -93,7 +111,7 @@ async function findJourneys(event) {
     return;
   }
   const mode = document.getElementById('journeyTimeMode').value;
-  const time = mode === 'now' ? Date.now() : LiveTransit.berlinInstant(document.getElementById('journeyDateTime').value);
+  const time = selectedJourneyTime(mode);
   if (!Number.isFinite(time)) {
     status.textContent = 'აირჩიე სწორი თარიღი და დრო.';
     return;
@@ -123,6 +141,7 @@ async function findJourneys(event) {
   walking.set('directModes', 'WALK');
   walking.set('maxDirectTime', '3600');
   journey.query = transit;
+  journey.searchMode = mode;
   const [routes, footpaths] = await Promise.all([
     safeFetchJSON(`${TRANSITOUS_BASE}/api/v5/plan?${transit}`, 15_000),
     safeFetchJSON(`${TRANSITOUS_BASE}/api/v5/plan?${walking}`, 15_000)
@@ -489,7 +508,8 @@ function updateJourneyProgress() {
     item.classList.toggle('waiting-text', !known);
     item.textContent = !known ? waitingText : departure <= now ? 'რეისი გასულია' :
       ready > departure ? 'გადასაჯდომად დრო არ კმარა' :
-      `გასვლამდე: ${journeyMinutes((departure - Math.max(now, ready)) / 1000)}`;
+      `გასვლამდე: ${journey.searchMode === 'now' ? formatCountdown(departure, now)
+        : journeyMinutes((departure - Math.max(now, ready)) / 1000)}`;
 
   }
   if (next === -1) stopJourneyLocation();

@@ -403,9 +403,9 @@
     .journey-result-legs { display: flex; align-items: center; flex-wrap: wrap; gap: .35rem; }
     .journey-result-legs svg { color: var(--ui-accent); flex-shrink: 0; }
     .walk-link {
-      display: grid; grid-template-columns: minmax(4.8rem, .92fr) 2.4rem minmax(0, 1.6fr);
-      grid-template-rows: auto minmax(4.8rem,auto) auto; column-gap: .35rem; align-items: center;
-      padding: .6rem .15rem; color: var(--ui-ink);
+      display: grid; grid-template-columns: minmax(4.4rem, .72fr) 2rem minmax(0, 1.8fr);
+      grid-template-rows: auto minmax(3rem,auto) auto; column-gap: .25rem; align-items: center;
+      padding: .2rem 0; margin-left: -.25rem; color: var(--ui-ink);
     }
     .walk-link .walk-label { grid-column: 1; grid-row: 1; text-align: right; font-size: .73rem; color: var(--ui-muted); }
     .walk-link .walk-info { grid-column: 1; grid-row: 2; text-align: right; font-size: .72rem; line-height: 1.45; }
@@ -419,6 +419,13 @@
     .walk-link :is(.walk-from,.walk-to).next { color: var(--ui-positive); font-weight: 800; }
     .walk-link .walk-eta { color: var(--ui-accent); font-weight: 750; }
     .vehicle-tooltip-heading { display: flex; align-items: center; gap: .25rem; }
+    .journey-date-fields { display: grid; grid-template-columns: 1fr 1fr; gap: .55rem; }
+    .journey-clock-input { display: flex; align-items: center; gap: .25rem; color: var(--ui-muted); }
+    .journey-clock-input input { min-width: 0; text-align: center; font-variant-numeric: tabular-nums; }
+    .stop-cluster { display: grid; place-items: center; width: 100%; height: 100%; border: 2px solid #b9f3d6;
+      border-radius: 50%; background: #0b6249; color: #fff; font-size: 11px; font-weight: 800; box-shadow: 0 2px 8px #0007; }
+    .stop-cluster-options { display: grid; gap: .3rem; max-height: 14rem; overflow-y: auto; }
+    .stop-cluster-options button { padding: .3rem; text-align: left; }
   </style>
 </head>
 <body class="bg-slate-950 text-slate-100 select-none">
@@ -636,8 +643,17 @@
                 <option value="arrive">ჩასვლა: დრო</option>
               </select>
               <div id="journeyTimePicker" class="hidden mt-2">
-                <label for="journeyDateTime">თარიღი და დრო · გერმანიის დროით</label>
-                <input id="journeyDateTime" type="datetime-local" step="60" disabled>
+                <div class="journey-date-fields">
+                  <div><label for="journeyDate">თარიღი</label><input id="journeyDate" type="date" disabled></div>
+                  <div>
+                    <label for="journeyHour">დრო · გერმანიის დროით</label>
+                    <div class="journey-clock-input">
+                      <input id="journeyHour" type="text" inputmode="numeric" maxlength="2" pattern="(?:[01]?[0-9]|2[0-3])" autocomplete="off" aria-label="საათი" disabled>
+                      <span aria-hidden="true">:</span>
+                      <input id="journeyMinute" type="text" inputmode="numeric" maxlength="2" pattern="(?:[0-5]?[0-9])" autocomplete="off" aria-label="წუთი" disabled>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
             <button type="submit" class="journey-primary">ძებნა</button>
@@ -817,7 +833,7 @@
 
   </div>
 
-  <script src="live-transit.js?v=6"></script>
+  <script src="live-transit.js?v=7"></script>
   <script>
     /*************************************************************************
      * 1. SUPABASE CLIENT
@@ -916,7 +932,6 @@
     // Global State
     let map = null;
     let streetTileLayer = null;
-    let showStopsOnMap = true;
     let stopsLayerGroup = null;
     let vehiclesLayerGroup = null;
     let routeOverlayLayerGroup = null;
@@ -925,8 +940,8 @@
 
     let enabledTransportTypes = new Set(['tram', 'bus', 'suburban', 'regional']);
 
-    let loadedStopsMap = new Map();
-    let stopMarkersMap = new Map();
+    let viewportStops = [];
+    let stopLayerSignature = '';
     let selectedStop = null;
     let currentDepartures = [];
 
@@ -1062,6 +1077,7 @@
       let moveTimeout = null;
       map.on('moveend', () => {
         viewportRequest++;
+        renderMapStops();
         clearTimeout(moveTimeout);
         moveTimeout = setTimeout(() => {
           refreshMapViewData();
@@ -1183,6 +1199,7 @@
       const zoom = map.getZoom();
       const spinner = document.getElementById('scanSpinner');
       if (zoom < 11) {
+        renderMapStops();
         activeTripsCache.clear();
         liveVehiclesState.clear();
         updateLiveMarkers();
@@ -1204,13 +1221,11 @@
       if (request !== viewportRequest) return;
 
       if (Array.isArray(stops)) {
-        for (const st of stops) {
-          const id = st.stopId;
-          if (!id || loadedStopsMap.has(id)) continue;
-          const stop = { id, name: st.name, platform: st.track || st.stopCode, location: { latitude: st.lat, longitude: st.lon } };
-          loadedStopsMap.set(id, stop);
-          createStopMarker(stop);
-        }
+        viewportStops = stops.filter(st => st.stopId && Number.isFinite(st.lat) && Number.isFinite(st.lon)).map(st => ({
+          id: st.stopId, name: st.name, platform: st.track || st.stopCode,
+          location: { latitude: st.lat, longitude: st.lon }
+        }));
+        renderMapStops();
       }
 
       activeTripsCache = LiveTransit.mapTrips(Array.isArray(segments) ? segments : [], now);
@@ -1221,70 +1236,101 @@
       finishManualRefresh(Array.isArray(stops) && Array.isArray(segments) ? 'განახლდა' : 'განახლება ვერ მოხერხდა');
     }
 
-    function createStopMarker(stop) {
-      const lat = stop.location.latitude;
-      const lng = stop.location.longitude;
-      const isSelected = selectedStop && String(selectedStop.id) === String(stop.id);
-
-      const icon = L.divIcon({
-        className: 'stop-marker-wrap',
-        html: `
-          <div id="stop-badge-${stop.id}" class="stop-badge ${isSelected ? 'selected' : ''}">
-            ${isSelected ? '<div class="stop-pulse-ring"></div>' : ''}
-            H
-          </div>
-        `,
-        iconSize: [26, 26],
-        iconAnchor: [13, 13]
-      });
-
-      const marker = L.marker([lat, lng], { icon });
-      if (showStopsOnMap) marker.addTo(stopsLayerGroup);
-
-      const label = stop.platform ? `${stop.name} · ბაქანი ${stop.platform}` : stop.name;
-      marker.bindTooltip(escapeHTML(label), { direction: 'top', offset: [0, -10], className: 'custom-tooltip' });
-      marker.on('click', () => selectStop({ ...stop, platformOnly: true }, true));
-
-      stopMarkersMap.set(String(stop.id), marker);
+    function stopLatLng(stop) {
+      return [stop.location.latitude, stop.location.longitude];
     }
 
-    function updateStopMarkerSelectionUI(newStopId, oldStopId) {
-      if (oldStopId && stopMarkersMap.has(oldStopId)) {
-        const oldStop = loadedStopsMap.get(oldStopId);
-        if (oldStop) {
-          stopMarkersMap.get(oldStopId).setIcon(L.divIcon({
-            className: 'stop-marker-wrap',
-            html: `<div id="stop-badge-${oldStop.id}" class="stop-badge">H</div>`,
-            iconSize: [26, 26], iconAnchor: [13, 13]
-          }));
+    function renderMapStops() {
+      if (!map || !stopsLayerGroup) return;
+      const zoom = map.getZoom();
+      const bounds = map.getBounds().pad(.12);
+      const selectedId = selectedStop?.id;
+      const groups = new Map();
+      if (zoom >= 11) {
+        const stops = new Map(viewportStops.map(stop => [stop.id, stop]));
+        if (selectedStop?.location && !stops.has(selectedId)) stops.set(selectedId, selectedStop);
+        for (const stop of stops.values()) {
+          const coordinates = stopLatLng(stop);
+          if (!bounds.contains(coordinates)) continue;
+          const point = map.project(coordinates, zoom);
+          const size = zoom < 14 ? 66 : zoom < 17 ? 48 : 30;
+          const key = stop.id === selectedId ? 'selected:' + stop.id : zoom >= 19
+            ? coordinates.map(value => value.toFixed(6)).join(',')
+            : `${Math.floor(point.x / size)}:${Math.floor(point.y / size)}`;
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key).push(stop);
         }
       }
-      if (newStopId && stopMarkersMap.has(newStopId)) {
-        const newStop = loadedStopsMap.get(newStopId);
-        if (newStop) {
-          stopMarkersMap.get(newStopId).setIcon(L.divIcon({
-            className: 'stop-marker-wrap',
-            html: `<div id="stop-badge-${newStop.id}" class="stop-badge selected"><div class="stop-pulse-ring"></div>H</div>`,
-            iconSize: [30, 30], iconAnchor: [15, 15]
-          }));
-        }
+      const signature = JSON.stringify([zoom, selectedId,
+        [...groups.values()].map(group => group.map(stop => [stop.id, ...stopLatLng(stop)]))]);
+      if (signature === stopLayerSignature) return;
+      stopLayerSignature = signature;
+      stopsLayerGroup.clearLayers();
+      for (const group of groups.values()) {
+        if (group.length === 1) createStopMarker(group[0]).addTo(stopsLayerGroup);
+        else createStopCluster(group, zoom).addTo(stopsLayerGroup);
       }
+    }
+
+    function createStopMarker(stop) {
+      const isSelected = selectedStop?.id === stop.id;
+      const size = isSelected ? 30 : 26;
+      const icon = L.divIcon({
+        className: 'stop-marker-wrap',
+        html: `<div id="stop-badge-${escapeHTML(stop.id)}" class="stop-badge ${isSelected ? 'selected' : ''}">
+          ${isSelected ? '<div class="stop-pulse-ring"></div>' : ''}H</div>`,
+        iconSize: [size, size], iconAnchor: [size / 2, size / 2]
+      });
+      const label = stop.platform ? `${stop.name} · ბაქანი ${stop.platform}` : stop.name;
+      const marker = L.marker(stopLatLng(stop), { icon, title: label, zIndexOffset: isSelected ? 200 : 0 });
+      marker.bindTooltip(escapeHTML(label), { direction: 'top', offset: [0, -10], className: 'custom-tooltip' });
+      marker.on('click', () => selectStop({ ...stop, platformOnly: true }, true));
+      return marker;
+    }
+
+    function createStopCluster(stops, zoom) {
+      const bounds = L.latLngBounds(stops.map(stopLatLng));
+      const count = stops.length;
+      const label = `${count} გაჩერება`;
+      const size = count > 99 ? 40 : count > 9 ? 35 : 30;
+      const marker = L.marker(bounds.getCenter(), {
+        title: label,
+        icon: L.divIcon({ className: 'stop-cluster-wrap',
+          html: `<span class="stop-cluster" aria-label="${label}">${count}</span>`,
+          iconSize: [size, size], iconAnchor: [size / 2, size / 2] })
+      });
+      if (zoom < 19) {
+        marker.on('click', () => {
+          const padding = L.point(72, 72);
+          const nextZoom = Math.min(19, zoom + 3, Math.max(zoom + 1, map.getBoundsZoom(bounds, false, padding)));
+          map.setView(bounds.getCenter(), nextZoom);
+        });
+      } else {
+        const options = document.createElement('div');
+        options.className = 'stop-cluster-options';
+        for (const stop of stops) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.textContent = stop.platform ? `${stop.name} · ბაქანი ${stop.platform}` : stop.name;
+          button.addEventListener('click', () => {
+            map.closePopup();
+            selectStop({ ...stop, platformOnly: true }, true);
+          });
+          options.append(button);
+        }
+        marker.bindPopup(options);
+      }
+      return marker;
     }
 
     /*************************************************************************
      * 7. SELECT STOP & FETCH LIVE DEPARTURES
      *************************************************************************/
     async function selectStop(stop, panToStop = true) {
-      const prevId = selectedStop ? String(selectedStop.id) : null;
       selectedStop = stop;
       const subtitle = document.getElementById('activeAreaSubtitle');
       if (subtitle.textContent === 'მუშავდება') subtitle.textContent = '';
-      loadedStopsMap.set(String(stop.id), stop);
-
-      if (!stopMarkersMap.has(String(stop.id)) && stop.location) {
-        createStopMarker(stop);
-      }
-      updateStopMarkerSelectionUI(String(stop.id), prevId);
+      renderMapStops();
 
       if (panToStop && stop.location) {
         map.panTo([stop.location.latitude, stop.location.longitude], { animate: true });
@@ -1314,6 +1360,60 @@
       return data.stopTimes.filter(event => event && (!stop.platformOnly || event.place?.stopId === stop.id));
     }
 
+    const fallbackTripCache = new Map();
+
+    function belongsToBoard(place, stop) {
+      return place?.stopId === stop.id || (!stop.platformOnly && place?.parentId === stop.id);
+    }
+
+    async function boardFromNearbyTrips(stop, now) {
+      if (!stop.location) return [];
+      const selected = stopLatLng(stop);
+      function nearbyCandidates(trips) {
+        const candidates = [];
+        for (const [id, trip] of trips) {
+          const relevant = trip.legs.filter(leg => leg.arrival >= now - 25000 && leg.departure <= now + 360_000);
+          const matched = relevant.some(leg => belongsToBoard(leg.from, stop) || belongsToBoard(leg.to, stop));
+          const position = LiveTransit.estimatedPosition(trip, now);
+          const meters = position ? haversineMeters(...selected, position.lat, position.lng) : Infinity;
+          if (matched || meters < 1500) candidates.push({ id, rank: matched ? -1 : meters });
+        }
+        return candidates;
+      }
+      let candidates = now - tripsFetchedAt <= LiveTransit.MAX_POSITION_AGE_MS
+        ? nearbyCandidates(activeTripsCache) : [];
+      if (!candidates.length) {
+        const [lat, lon] = selected;
+        const area = `min=${lat - .02},${lon - .025}&max=${lat + .02},${lon + .025}`;
+        const time = `startTime=${new Date(now - 120_000).toISOString()}&endTime=${new Date(now + 120_000).toISOString()}`;
+        const data = await safeFetchJSON(`${TRANSITOUS_BASE}/api/v5/map/trips?${area}&${time}&zoom=15`, 5000);
+        if (Array.isArray(data)) candidates = nearbyCandidates(LiveTransit.mapTrips(data, now));
+      }
+      candidates.sort((a, b) => a.rank - b.rank);
+      const responses = await Promise.all(candidates.slice(0, 4).map(async ({ id }) => {
+        const cached = fallbackTripCache.get(id);
+        if (cached && now - cached.time < 60_000) return cached.legs;
+        const data = await safeFetchJSON(`${TRANSITOUS_BASE}/api/v5/trip?tripId=${encodeURIComponent(id)}&joinInterlinedLegs=false`, 5000);
+        const legs = Array.isArray(data?.legs) ? data.legs : [];
+        if (fallbackTripCache.size >= 30) fallbackTripCache.delete(fallbackTripCache.keys().next().value);
+        fallbackTripCache.set(id, { time: now, legs });
+        return legs;
+      }));
+      const events = new Map();
+      for (const leg of responses.flat()) {
+        for (const place of [leg.from, ...(leg.intermediateStops ?? [])]) {
+          const departure = Date.parse(place?.departure ?? place?.scheduledDeparture);
+          if (!belongsToBoard(place, stop) || place.cancelled || leg.cancelled ||
+              place.pickupType === 'NOT_ALLOWED' || !Number.isFinite(departure) ||
+              departure < now - 8000 || departure > now + 3_600_000) continue;
+          const key = JSON.stringify([leg.tripId, place.stopId, departure]);
+          events.set(key, { ...leg, place,
+            realTime: LiveTransit.hasLiveTime(place.departureTimestampReason), tripCancelled: false });
+        }
+      }
+      return [...events.values()].sort((a, b) => Date.parse(a.place.departure) - Date.parse(b.place.departure));
+    }
+
     function upcomingBoardDepartures(events, now, scheduled = false) {
       return LiveTransit.departures(events, scheduled).filter(dep => {
         const time = Date.parse(dep.when ?? dep.scheduledWhen);
@@ -1337,13 +1437,18 @@
       try {
         const { day, next, midnight } = LiveTransit.nextBerlinDay(now);
         const scope = stop.platformOnly ? '&radius=0&exactRadius=true' : '';
-        const fetchBoard = (time, extra = '') => safeFetchJSON(
-          `${TRANSITOUS_BASE}/api/v5/stoptimes?stopId=${encodeURIComponent(stop.id)}&time=${encodeURIComponent(new Date(time).toISOString())}${scope}${extra}`, 9000);
-        const data = await fetchBoard(now - 60_000, '&n=40&window=3600');
+        const fetchBoard = (time, extra = '', version = 'v5') => safeFetchJSON(
+          `${TRANSITOUS_BASE}/api/${version}/stoptimes?stopId=${encodeURIComponent(stop.id)}&time=${encodeURIComponent(new Date(time).toISOString())}${scope}${extra}`, 6500);
+        let data = await fetchBoard(now - 60_000, '&n=40&window=3600');
         if (request !== departuresRequest) return;
-        const events = boardEvents(data, stop);
+        if (!Array.isArray(data?.stopTimes)) data = await fetchBoard(now - 60_000, '&n=30', 'v6');
+        if (request !== departuresRequest) return;
+        const board = boardEvents(data, stop);
+        const fallback = !board?.length ? await boardFromNearbyTrips(stop, now) : [];
+        if (request !== departuresRequest) return;
+        const events = fallback.length ? fallback : board;
         let entries = [];
-        let note = '';
+        let note = fallback.length ? 'რეისის მარშრუტიდან მიღებული მონაცემები' : '';
         if (events) {
           const onDay = (dep, date) => {
             const time = Date.parse(dep.when ?? dep.scheduledWhen);
@@ -1404,16 +1509,22 @@
 
     function updateDepartureCountdowns() {
       const now = Date.now();
+      const today = LiveTransit.berlinLocal(now).slice(0, 10);
       document.querySelectorAll('[data-board-trip]').forEach(row => {
-        const dep = currentDepartures.find(item => item.tripId === row.dataset.boardTrip && String(item.stopId ?? '') === row.dataset.stopId);
+        const dep = currentDepartures[Number(row.dataset.boardTrip)];
         if (!dep) return;
-        const trip = activeTripsCache.get(dep.tripId);
-        const position = markerPositions.get(dep.tripId) ?? (trip && now - tripsFetchedAt <= LiveTransit.MAX_POSITION_AGE_MS
-          ? LiveTransit.estimatedPosition(trip, now) : null);
-        const atStop = LiveTransit.departureAtStop(dep, position, now);
-        row.hidden = !atStop && Date.parse(dep.when) < now - 8000;
+        const trip = now - tripsFetchedAt <= LiveTransit.MAX_POSITION_AGE_MS ? activeTripsCache.get(dep.tripId) : null;
+        const position = markerPositions.get(dep.tripId) ?? (trip ? LiveTransit.estimatedPosition(trip, now) : null);
+        const planned = LiveTransit.isPlannedDeparture(dep, now, today);
+        const atStop = !planned && LiveTransit.departureAtStop(dep, position, now);
+        const departure = Date.parse(dep.when ?? dep.scheduledWhen);
+        const plannedChip = row.querySelector('[data-board-planned]');
+        plannedChip.classList.toggle('hidden', !planned);
+        row.querySelector('[data-board-status]')?.classList.toggle('hidden', planned);
+        row.hidden = !atStop && departure < now - 8000;
         row.parentElement.hidden = row.hidden;
-        paintCountdown(row.querySelector('[data-countdown]'), Number(row.dataset.arrival), now, atStop ? 'გაჩერებაზეა' : null);
+        const label = atStop ? 'გაჩერებაზეა' : planned ? boardDate.format(departure) : null;
+        paintCountdown(row.querySelector('[data-countdown]'), LiveTransit.boardArrival(dep, trip, position, now), now, label);
       });
       const cards = document.querySelectorAll('#departuresList .departure-card');
       if (cards.length) document.getElementById('departuresCountBadge').textContent = [...cards].filter(card => !card.hidden).length;
@@ -1430,26 +1541,26 @@
         const cancelled = dep.cancelled || dep.skipped;
         const time = Date.parse(dep.when);
         const planned = Date.parse(dep.scheduledWhen);
-        const status = dep.cancelled ? 'გაუქმებულია' : dep.skipped ? 'გაჩერებას გამოტოვებს' : dep.scheduledOnly ? 'გეგმიური' :
+        const status = dep.cancelled ? 'გაუქმებულია' : dep.skipped ? 'გაჩერებას გამოტოვებს' :
           !Number.isFinite(delay) ? '' : delay > 0 ? `+${delay} წთ დაგვიანება` :
           delay < 0 ? `${Math.abs(delay)} წთ ადრე` : 'დროულად';
-        const when = Date.parse(dep.when ? (dep.arrival ?? dep.when) : null);
         return `
           <div>
             <button type="button" onclick="openVehicleInSidebar('${tripClick(dep.tripId)}', true)"
-              class="departure-card" ${cancelled || dep.scheduledOnly ? '' : `data-board-trip="${escapeHTML(dep.tripId)}" data-stop-id="${escapeHTML(dep.stopId)}" data-arrival="${when}"`}>
+              class="departure-card" ${cancelled ? '' : `data-board-trip="${currentDepartures.indexOf(dep)}"`}>
               <span class="departure-line" style="--line-color:${style.bg}; color:var(--line-color)">${style.svg} ${escapeHTML(style.formattedLabel)}</span>
               <span class="departure-main">
                 <span class="departure-direction">${escapeHTML(dep.direction)}</span>
                 <span class="departure-meta">
                   ${!cancelled && Number.isFinite(time) ? `<strong>${displayTime.format(time)}</strong>` : ''}
                   ${!cancelled && delay && Number.isFinite(planned) ? `<del class="text-slate-400">${displayTime.format(planned)}</del>` : ''}
-                  ${status ? `<span class="departure-chip ${cancelled ? 'error' : dep.scheduledOnly ? '' : delay ? 'warn' : 'good'}">${status}</span>` : ''}
+                  ${status ? `<span data-board-status class="departure-chip ${cancelled ? 'error' : delay ? 'warn' : 'good'}">${status}</span>` : ''}
+                  ${cancelled ? '' : '<span data-board-planned class="departure-chip hidden">გეგმიური</span>'}
                   ${dep.platform ? `<span class="departure-chip">${dep.platformChanged ? 'ახალი ბაქანი' : 'ბაქანი'} ${escapeHTML(dep.platform)}</span>` : ''}
                 </span>
               </span>
               <span class="departure-count" ${cancelled ? 'hidden' : ''}>
-                <span data-countdown>${dep.scheduledOnly ? boardDate.format(time) : waitingMarkup}</span><small>რუკაზე ნახვა</small>
+                <span data-countdown>${waitingMarkup}</span><small>რუკაზე ნახვა</small>
               </span>
             </button>
             ${renderAlerts(dep.alerts)}
@@ -1706,8 +1817,6 @@
       const cancelled = trackedLeg.cancelled || targetStop?.cancelled ||
         (trackedFromBoard && currentDepartures.some(dep => dep.tripId === trackedTripId && (dep.cancelled || (dep.skipped && dep.stopId === trackedTargetId))));
       const boardDeparture = currentDepartures.find(dep => dep.tripId === trackedTripId && dep.stopId === trackedTargetId);
-      const arrival = LiveTransit.hasLiveTime(targetStop?.arrivalTimestampReason)
-        ? Date.parse(targetStop.arrival) : Date.parse(boardDeparture?.arrival ?? boardDeparture?.when);
       const activeLeg = trackedLeg.service.findLast(segment => Date.parse(segment.startTime) <= now) ?? trackedLeg;
       const activeId = activeLeg.tripId;
       const reported = liveVehiclesState.get(activeId);
@@ -1730,8 +1839,11 @@
         stopId: targetStop.stopId, arrival: targetStop.arrival, when: targetStop.departure,
         arrivalLive: LiveTransit.hasLiveTime(targetStop.arrivalTimestampReason)
       }, position, now);
-      paintCountdown(document.getElementById('trackArrival'), arrival, now,
-        cancelled ? waitingText : stoppedAtTarget ? 'გაჩერებაზეა' : null);
+      const eta = LiveTransit.hasLiveTime(targetStop?.arrivalTimestampReason)
+        ? Date.parse(targetStop.arrival) : boardDeparture ? LiveTransit.boardArrival(boardDeparture, trip, position, now) : NaN;
+      const planned = boardDeparture && LiveTransit.isPlannedDeparture(boardDeparture, now);
+      paintCountdown(document.getElementById('trackArrival'), eta, now,
+        cancelled ? waitingText : stoppedAtTarget ? 'გაჩერებაზეა' : planned ? boardDate.format(Date.parse(boardDeparture.when)) : null);
       const remaining = current >= 0 && target >= 0
         ? stops.slice(current + 1, target).filter(stop => !stop.cancelled).length : null;
       setTrackingText('trackRemaining', cancelled || remaining === null ? waitingText : String(remaining));
@@ -2077,6 +2189,6 @@
       toastTimer = setTimeout(() => box.classList.add('hidden'), 3500);
     }
   </script>
-  <script src="journey.js?v=4"></script>
+  <script src="journey.js?v=5"></script>
 </body>
 </html>

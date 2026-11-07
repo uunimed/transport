@@ -128,7 +128,8 @@
         when,
         scheduledWhen: place.scheduledDeparture,
         scheduledOnly,
-        arrival: place.arrival,
+        arrival: scheduledOnly ? (place.scheduledArrival ?? place.arrival) : place.arrival,
+        firstStop: Boolean(place.stopId && item.tripFrom?.stopId === place.stopId),
         arrivalLive: !scheduledOnly && hasLiveTime(place.arrivalTimestampReason),
         stopId: place.stopId,
         delay,
@@ -142,13 +143,33 @@
   }
 
   function departureAtStop(dep, position, now) {
-    if (dep.cancelled || dep.skipped || dep.scheduledOnly) return false;
+    if (dep.cancelled || dep.skipped) return false;
     const atPlatform = position?.from?.stopId === dep.stopId && Boolean(dep.stopId);
     const departure = Date.parse(dep.when);
     const arrival = Date.parse(dep.arrival);
     if (position?.stopped && atPlatform && (!Number.isFinite(departure) || now <= departure + 25000)) return true;
-    if (!dep.arrivalLive || !Number.isFinite(arrival) || !Number.isFinite(departure)) return false;
+    if (dep.scheduledOnly || !dep.arrivalLive || !Number.isFinite(arrival) || !Number.isFinite(departure)) return false;
     return arrival <= now && now <= Math.max(departure, arrival + 8000);
+  }
+
+  function isPlannedDeparture(dep, now, today = berlinLocal(now).slice(0, 10)) {
+    const departure = Date.parse(dep.when ?? dep.scheduledWhen);
+    return Number.isFinite(departure) && departure > now &&
+      (departure - now > 12 * 60 * 60_000 || berlinLocal(departure).slice(0, 10) > today);
+  }
+
+  function boardArrival(dep, trip, position, now) {
+    const approach = trip?.legs.find(leg => leg.to?.stopId === dep.stopId && leg.arrival >= now - 8000);
+    const arrival = Date.parse(dep.arrival ?? dep.when);
+    if (position && !position.stopped) return !dep.scheduledOnly && Number.isFinite(arrival) && (arrival >= now || !approach)
+      ? arrival : approach?.arrival ?? arrival;
+    if (dep.scheduledOnly || !position && dep.firstStop) return NaN;
+    if (position?.stopped) {
+      const lastArrival = trip?.legs.findLast(leg => leg.to?.stopId === position.from?.stopId && leg.arrival <= now)?.arrival;
+      const first = !lastArrival && trip?.legs[0]?.from?.stopId === position.from?.stopId;
+      if (first || Number.isFinite(lastArrival) && now - lastArrival > 60_000) return NaN;
+    }
+    return arrival;
   }
 
   function decodePolyline(points, precision = 5) {
@@ -322,7 +343,7 @@
     return positions;
   }
 
-  const api = { berlinLocal, berlinInstant, nextBerlinDay, hasLiveTime, positionOnRoute, routeProgress, remainingRoute, throughService, mapTrips, estimatedPosition, departures, departureAtStop, decodePolyline, vehiclePositions, MAX_POSITION_AGE_MS };
+  const api = { berlinLocal, berlinInstant, nextBerlinDay, hasLiveTime, positionOnRoute, routeProgress, remainingRoute, throughService, mapTrips, estimatedPosition, departures, departureAtStop, isPlannedDeparture, boardArrival, decodePolyline, vehiclePositions, MAX_POSITION_AGE_MS };
   if (typeof module === 'object') module.exports = api;
   else root.LiveTransit = api;
 })(globalThis);

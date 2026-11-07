@@ -43,7 +43,8 @@
 
   function estimatedPosition(trip, now = Date.now()) {
     const next = trip.legs.findIndex(leg => leg.departure > now);
-    const previous = trip.legs[next < 0 ? trip.legs.length - 1 : next - 1];
+    const index = next < 0 ? trip.legs.length - 1 : next - 1;
+    const previous = trip.legs[index];
     const upcoming = trip.legs[next];
     if (!previous) return null;
     if (now >= previous.arrival) {
@@ -58,7 +59,16 @@
     }
     const leg = previous;
     if (!leg.points.length) return null;
-    const { departure, arrival, points, distances } = leg;
+    const { arrival, points, distances } = leg;
+    const incoming = trip.legs[index - 1];
+    const sameStop = leg.from?.stopId && incoming?.to?.stopId === leg.from.stopId;
+    const briefStop = sameStop && Math.abs(incoming.arrival - leg.departure) <= 5000;
+    const dwell = briefStop ? Math.min(8000, (arrival - leg.departure) / 4) : 0;
+    const departure = leg.departure + dwell;
+    if (now < departure) {
+      return { lat: leg.from.lat ?? points[0][0], lng: leg.from.lon ?? points[0][1],
+        from: leg.from, to: leg.to, stopped: true };
+    }
     const progress = arrival > departure ? (now - departure) / (arrival - departure) : 0;
     const target = progress * distances.at(-1);
     if (!target) return { lat: points[0][0], lng: points[0][1], from: leg.from, to: leg.to };
@@ -92,6 +102,7 @@
         when,
         scheduledWhen: place.scheduledDeparture,
         arrival: place.arrival,
+        arrivalLive: hasLiveTime(place.arrivalTimestampReason),
         stopId: place.stopId,
         delay,
         platform: place.track,
@@ -101,6 +112,16 @@
         alerts: place.alerts
       }];
     });
+  }
+
+  function departureAtStop(dep, position, now) {
+    if (dep.cancelled || dep.skipped) return false;
+    const atPlatform = position?.from?.stopId === dep.stopId && Boolean(dep.stopId);
+    const departure = Date.parse(dep.when);
+    const arrival = Date.parse(dep.arrival);
+    if (position?.stopped && atPlatform && (!Number.isFinite(departure) || now <= departure + 25000)) return true;
+    if (!dep.arrivalLive || !Number.isFinite(arrival) || !Number.isFinite(departure)) return false;
+    return arrival <= now && now <= Math.max(departure, arrival + 8000);
   }
 
   function decodePolyline(points, precision = 5) {
@@ -274,7 +295,7 @@
     return positions;
   }
 
-  const api = { hasLiveTime, positionOnRoute, routeProgress, remainingRoute, throughService, mapTrips, estimatedPosition, departures, decodePolyline, vehiclePositions, MAX_POSITION_AGE_MS };
+  const api = { hasLiveTime, positionOnRoute, routeProgress, remainingRoute, throughService, mapTrips, estimatedPosition, departures, departureAtStop, decodePolyline, vehiclePositions, MAX_POSITION_AGE_MS };
   if (typeof module === 'object') module.exports = api;
   else root.LiveTransit = api;
 })(globalThis);

@@ -324,25 +324,47 @@
     .countdown-urgent { color: #fb7185; }
     html.light .countdown-urgent { color: #b4233d; }
     .countdown-urgent .countdown-seconds { animation: blinkDot .85s infinite; }
-    #trackStopsTimeline, .journey-stops { padding-left: .9rem; }
-    .tracking-stop, .journey-step {
-      position: relative; margin-left: .45rem; padding: .55rem .65rem .55rem 1.15rem;
-      border-left: 1px solid var(--ui-border); color: var(--ui-ink); border-radius: 0;
+    #trackStopsTimeline { padding: .3rem .9rem .9rem; }
+    .route-steps { padding: .25rem 0; }
+    .route-step {
+      position: relative; display: grid; grid-template-columns: 1rem minmax(0,1fr) auto;
+      align-items: start; gap: .55rem; padding: .5rem .1rem; min-height: 2.3rem;
+      color: var(--ui-ink);
     }
-    .tracking-dot, .journey-step::before {
-      position: absolute; left: -.28rem; top: .85rem; width: .55rem; height: .55rem; content: '';
-      border: 1px solid var(--ui-muted); background: var(--ui-surface); border-radius: 50%;
+    .route-step:not(:last-child)::after {
+      content: ''; position: absolute; top: 1.15rem; bottom: -.65rem;
+      left: .53rem; width: 2px; background: var(--ui-border);
     }
-    .tracking-stop.current, .journey-step.next {
-      background: var(--ui-raised); box-shadow: none; border-left: 2px solid var(--ui-positive);
-      border-radius: 0 .65rem .65rem 0; font-weight: 800;
+    .route-node {
+      z-index: 1; position: relative; margin: .18rem auto 0;
+      width: .6rem; height: .6rem; border: 2px solid var(--ui-muted); border-radius: 50%;
+      background: var(--ui-surface);
     }
-    .tracking-stop.current .tracking-dot { background: var(--ui-positive); border-color: var(--ui-positive); animation: blinkDot 1.2s infinite; }
-    .tracking-stop.target { color: var(--ui-accent); }
-    .tracking-stop.target .tracking-dot { border-color: var(--ui-accent); }
-    .tracking-stop.passed, .journey-step.passed { opacity: .56; }
-    .tracking-stop.passed.target { opacity: 1; }
-
+    .route-step.current { color: var(--ui-positive); font-weight: 800; }
+    .route-step.current .route-node { border-color: var(--ui-positive); background: var(--ui-positive); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-positive), transparent 78%); }
+    .route-step.target { color: var(--ui-accent); }
+    .route-step.target .route-node { border-color: var(--ui-accent); }
+    .route-step.passed { opacity: .5; }
+    .route-step.passed :is(.route-stop-name,time) { text-decoration: line-through; }
+    .route-step-meta { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .route-step-meta small, .route-note { display: flex; align-items: center; justify-content: flex-end; gap: .2rem; font-size: .64rem; }
+    .route-note { justify-content: flex-start; color: var(--ui-accent); margin-top: .18rem; }
+    .route-step-meta small:empty { display: none; }
+    .route-step-main { overflow-wrap: anywhere; }
+    .journey-stops { padding-left: .85rem; }
+    .journey-step { position: relative; margin-left: .45rem; padding: .55rem .65rem .55rem 1.15rem; border-left: 1px solid var(--ui-border); color: var(--ui-ink); }
+    .journey-step::before { position: absolute; left: -.28rem; top: .85rem; width: .55rem; height: .55rem; content: ''; border: 1px solid var(--ui-muted); background: var(--ui-surface); border-radius: 50%; }
+    .journey-step.next { background: var(--ui-raised); border-left: 2px solid var(--ui-positive); border-radius: 0 .65rem .65rem 0; font-weight: 800; }
+    .journey-step.passed { opacity: .52; text-decoration: line-through; }
+    .vehicle-marker-container.vehicle-muted { pointer-events: none; }
+    .journey-time-range, .journey-summary { display: inline-flex; align-items: center; gap: .3rem; }
+    .journey-summary { flex-wrap: wrap; }
+    .journey-time-range svg, .transfer-stops svg, .through-line strong svg { color: var(--ui-accent); flex-shrink: 0; display: inline-block; vertical-align: middle; }
+    .journey-transfer-card { display: grid; grid-template-columns: 1.45rem minmax(0, 1fr); gap: .55rem; padding: .65rem .8rem; margin-left: .4rem; border-left: 2px solid var(--ui-accent); background: var(--ui-raised); color: var(--ui-ink); font-size: .74rem; }
+    .journey-transfer-card p { margin-top: .18rem; }
+    .transfer-stops { color: var(--ui-accent); }
+    .transfer-arrow { display: grid; place-items: center; width: 1.45rem; height: 1.45rem; border-radius: 50%; background: var(--ui-surface); color: var(--ui-accent); }
+    .transfer-short { border-color: #e05267; }
     .journey-form, .journey-card, .journey-leg, .journey-detail-header {
       background: var(--ui-surface); color: var(--ui-ink); border: 1px solid var(--ui-border);
       border-radius: .9rem; padding: .8rem;
@@ -364,7 +386,7 @@
     .journey-step.next { font-size: 1.05em; }
     .journey-step.next::before { background: var(--ui-positive); border-color: var(--ui-positive); }
     @media (prefers-reduced-motion: reduce) {
-      .countdown-urgent .countdown-seconds, .tracking-stop.current .tracking-dot { animation: none; }
+      .countdown-urgent .countdown-seconds { animation: none; }
     }
   </style>
 </head>
@@ -472,13 +494,13 @@
         <!-- Map refresh -->
         <div id="mapRefreshControl" class="absolute bottom-5 left-3 z-[400] flex items-center gap-2 pointer-events-auto">
           <button
-            onclick="refreshMapViewData()"
+            id="mapRefreshButton" type="button" onclick="refreshMapManually()"
             class="px-3 py-1.5 rounded-xl bg-slate-900/95 hover:bg-slate-800 text-slate-200 text-xs font-bold border border-slate-700 shadow-2xl flex items-center gap-2 transition backdrop-blur-md"
           >
             <svg id="scanSpinner" class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            <span>განახლება</span>
+            <span id="mapRefreshLabel" role="status">განახლება</span>
           </button>
         </div>
       </div>
@@ -747,7 +769,7 @@
 
   </div>
 
-  <script src="live-transit.js?v=3"></script>
+  <script src="live-transit.js?v=4"></script>
   <script>
     /*************************************************************************
      * 1. SUPABASE CLIENT
@@ -871,6 +893,9 @@
     let stopAlerts = [];
     let trackedLeg = null;
     let trackedFromBoard = false;
+    let trackedGeometry = '';
+    let routeProgressFloor = 0;
+    let focusedTargetMarker = null;
     let activeSidebarTab = 'departures';
     let trackingReturnTab = 'departures';
     let trackedRoute = null;
@@ -1081,6 +1106,30 @@
     /*************************************************************************
      * 6. REFRESH MAP VIEW
      *************************************************************************/
+    let manualRefreshPending = false;
+    let refreshLabelTimer;
+    function finishManualRefresh(label) {
+      if (!manualRefreshPending) return;
+      manualRefreshPending = false;
+      const button = document.getElementById('mapRefreshButton');
+      const status = document.getElementById('mapRefreshLabel');
+      button.removeAttribute('aria-busy');
+      status.textContent = label;
+      button.title = label;
+      refreshLabelTimer = setTimeout(() => { status.textContent = 'განახლება'; }, 4000);
+    }
+
+    function refreshMapManually() {
+      clearTimeout(refreshLabelTimer);
+      manualRefreshPending = true;
+      document.getElementById('mapRefreshButton').setAttribute('aria-busy', 'true');
+      document.getElementById('mapRefreshLabel').textContent = 'ახლდება…';
+      if (selectedStop) refreshSelectedStopDepartures(true);
+      if (trackedTripId) refreshTrackedTrip();
+      if (map.getZoom() < 11) map.setZoom(11);
+      refreshMapViewData();
+    }
+
     async function refreshMapViewData() {
       const request = ++viewportRequest;
       const zoom = map.getZoom();
@@ -1090,6 +1139,7 @@
         liveVehiclesState.clear();
         updateLiveMarkers();
         spinner.classList.remove('animate-spin');
+        finishManualRefresh('მოადიდე რუკა');
         return;
       }
 
@@ -1120,6 +1170,7 @@
       tripsFetchedAt = Date.now();
       updateLiveMarkers();
       spinner.classList.remove('animate-spin');
+      finishManualRefresh(Array.isArray(stops) && Array.isArray(segments) ? 'განახლდა' : 'განახლება ვერ მოხერხდა');
     }
 
     function createStopMarker(stop) {
@@ -1329,20 +1380,42 @@
     }
 
     function vehicleTooltip(trip, style, position) {
-      const direction = tooltipDirections.get(trip.tripId)?.direction ?? trip.direction;
+      const info = tooltipDirections.get(trip.tripId);
+      const direction = info?.direction ?? trip.direction;
       const stops = position.from?.name || position.to?.name
         ? `<div class="vehicle-tooltip-stops">${escapeHTML(position.from?.name ?? '—')} ${directionArrow} ${escapeHTML(position.to?.name ?? '—')}</div>`
         : '';
-      return `<div class="vehicle-tooltip-heading">${style.svg} ${escapeHTML(style.formattedLabel)} · ${escapeHTML(direction)}</div>${stops}`;
+      return `<div class="vehicle-tooltip-heading">${style.svg} ${escapeHTML(info?.names || style.formattedLabel)} · ${escapeHTML(direction)}</div>${stops}`;
     }
 
     async function loadTooltipDirection(id) {
       const saved = tooltipDirections.get(id);
       if (saved && Date.now() - saved.time < 90_000) return;
-      tooltipDirections.set(id, { time: Date.now(), direction: saved?.direction });
-      const data = await safeFetchJSON(`${TRANSITOUS_BASE}/api/v5/trip?tripId=${encodeURIComponent(id)}`);
-      const leg = data?.legs?.find(leg => leg.tripId === id);
-      if (leg?.headsign || leg?.to?.name) tooltipDirections.set(id, { time: Date.now(), direction: leg.headsign || leg.to.name });
+      tooltipDirections.set(id, { ...saved, time: Date.now() });
+      const data = await safeFetchJSON(`${TRANSITOUS_BASE}/api/v5/trip?tripId=${encodeURIComponent(id)}&joinInterlinedLegs=false`);
+      const leg = Array.isArray(data?.legs) ? LiveTransit.throughService(data.legs, id) : null;
+      if (!leg) return;
+      const final = leg.service.at(-1);
+      const names = [...new Set(leg.service.map(section =>
+        getLineStyle(section.displayName || section.routeShortName, section.mode).formattedLabel))];
+      tooltipDirections.set(id, { time: Date.now(), direction: final.headsign || final.to?.name, names: names.join(' / ') });
+    }
+
+    function updateMapFocus() {
+      if (!map || !stopsLayerGroup) return;
+      const activeJourney = journey.visible && journey.selected && journey.layer?.getLayers().length;
+      const activeTrip = trackedFromBoard && trackedLine;
+      const focus = Boolean(activeJourney || activeTrip);
+      if (focus && map.hasLayer(stopsLayerGroup)) map.removeLayer(stopsLayerGroup);
+      if (!focus && !map.hasLayer(stopsLayerGroup)) stopsLayerGroup.addTo(map);
+      const related = new Set(activeJourney
+        ? journey.selected.legs.map(leg => leg.tripId)
+        : activeTrip ? trackedLeg.service.map(leg => leg.tripId) : []);
+      for (const [id, marker] of liveVehicleMarkers) {
+        const opacity = focus && !related.has(id) ? .1 : 1;
+        if (marker.options.opacity !== opacity) marker.setOpacity(opacity);
+        marker.getElement()?.classList.toggle('vehicle-muted', opacity < 1);
+      }
     }
 
     function updateLiveMarkers() {
@@ -1391,6 +1464,7 @@
         tooltipDirections.delete(id);
       }
       if (trackedTripId && trackedLeg && trackedRoute) updateTrackedView(now);
+      else updateMapFocus();
     }
 
     /*************************************************************************
@@ -1410,7 +1484,11 @@
       trackedLeg = null;
       trackedRoute = null;
       trackedLine = null;
+      focusedTargetMarker = null;
+      trackedGeometry = '';
+      routeProgressFloor = 0;
       routeOverlayLayerGroup.clearLayers();
+      updateMapFocus();
       const departure = currentDepartures.find(dep => dep.tripId === trackedTripId);
       trackedTargetId = fromBoard ? (departure?.stopId || selectedStop?.id) : null;
       trackedTargetTime = Date.parse(departure?.arrival ?? departure?.when);
@@ -1428,16 +1506,18 @@
     async function refreshTrackedTrip(fitBounds = false) {
       const request = ++tripRequest;
       const id = trackedTripId;
-      const data = await safeFetchJSON(`${TRANSITOUS_BASE}/api/v5/trip?tripId=${encodeURIComponent(id)}`);
+      const data = await safeFetchJSON(`${TRANSITOUS_BASE}/api/v5/trip?tripId=${encodeURIComponent(id)}&joinInterlinedLegs=false`);
       if (request !== tripRequest || id !== trackedTripId) return;
 
-      const leg = Array.isArray(data?.legs) ? data.legs.find(leg => leg.tripId === id) : null;
+      const leg = Array.isArray(data?.legs) ? LiveTransit.throughService(data.legs, id) : null;
       trackedLeg = leg ?? null;
       trackedFetchedAt = Date.now();
       trackedRoute = null;
       if (!leg) {
         trackedLine = null;
+        focusedTargetMarker = null;
         routeOverlayLayerGroup.clearLayers();
+        updateMapFocus();
         setTrackingText('trackDirectionTitle', 'მარშრუტი');
         setTrackingText('trackCurrentSegment', 'რეისის მონაცემები მიუწვდომელია');
         for (const field of ['trackArrival', 'trackDistance', 'trackRemaining']) setTrackingText(field, '—');
@@ -1446,9 +1526,16 @@
       }
       const style = getLineStyle(leg.displayName, leg.mode);
       const badge = document.getElementById('trackLineBadge');
-      badge.innerHTML = style.svg + escapeHTML(style.formattedLabel);
+      const serviceNames = [...new Set(leg.service.map(segment =>
+        getLineStyle(segment.displayName || segment.routeShortName, segment.mode).formattedLabel))];
+      badge.innerHTML = style.svg + escapeHTML(serviceNames.join(' / '));
+      const geometry = JSON.stringify(leg.service.map(segment => segment.legGeometry?.points));
+      if (geometry !== trackedGeometry) {
+        routeProgressFloor = 0;
+        trackedGeometry = geometry;
+      }
       badge.style.backgroundColor = style.bg;
-      setTrackingText('trackDirectionTitle', 'მიმართულება: ' + (leg.headsign || leg.to?.name || '—'));
+      setTrackingText('trackDirectionTitle', 'მიმართულება: ' + (leg.service.at(-1).headsign || leg.to?.name || '—'));
       if (!trackedFromBoard && trackedLine) {
         routeOverlayLayerGroup.removeLayer(trackedLine);
         trackedLine = null;
@@ -1459,17 +1546,21 @@
       }
       const { stops, target } = trackedRoute;
       setTrackingText('trackTarget', stops[target]?.name ?? selectedStop?.name ?? '—');
-      document.getElementById('trackStopsTimeline').innerHTML = renderAlerts(leg.alerts) + stops.map((stop, index) => {
+      const rows = stops.map((stop, index) => {
         const time = Date.parse(index === target ? (stop.arrival ?? stop.departure) : (stop.departure ?? stop.arrival));
         const value = leg.cancelled || stop.cancelled ? 'გამოტოვებულია' : Number.isFinite(time) ? displayTime.format(time) : '—';
-        return `<div data-route-stop="${index}" class="tracking-stop ${index === target ? 'target' : ''} rounded-lg bg-slate-950/70 px-3 py-2">
-          <div class="flex items-center justify-between gap-2">
-            <span class="tracking-dot" aria-hidden="true"></span>
-            <span class="flex-1">${escapeHTML(stop.name)}</span>
-            <time class="font-mono shrink-0">${value}</time>
-          </div>${renderAlerts(stop.alerts)}
-        </div>`;
+        return `<li data-route-stop="${index}" class="route-step ${index === target ? 'target' : ''}">
+          <span class="route-node" aria-hidden="true"></span>
+          <div class="route-step-main">
+            <span class="route-stop-name">${escapeHTML(stop.name)}</span>
+            ${stop.lineChange ? `<small class="route-note">${directionArrow} ხაზის ცვლილება · ${escapeHTML(stop.lineChange)}</small>` : ''}
+            ${renderAlerts(stop.alerts)}
+          </div>
+          <div class="route-step-meta"><time>${value}</time><small data-route-label></small></div>
+        </li>`;
       }).join('');
+      document.getElementById('trackStopsTimeline').innerHTML =
+        renderAlerts(leg.alerts) + `<ol class="route-steps">${rows}</ol>`;
       updateTrackedView(Date.now());
       if (fitBounds) fitTrackedRouteBounds();
     }
@@ -1482,8 +1573,10 @@
       const boardDeparture = currentDepartures.find(dep => dep.tripId === trackedTripId && dep.stopId === trackedTargetId);
       const arrival = LiveTransit.hasLiveTime(targetStop?.arrivalTimestampReason)
         ? Date.parse(targetStop.arrival) : Date.parse(boardDeparture?.arrival ?? boardDeparture?.when);
-      const reported = liveVehiclesState.get(trackedTripId);
-      const trip = activeTripsCache.get(trackedTripId);
+      const activeLeg = trackedLeg.service.findLast(segment => Date.parse(segment.startTime) <= now) ?? trackedLeg;
+      const activeId = activeLeg.tripId;
+      const reported = liveVehiclesState.get(activeId);
+      const trip = activeTripsCache.get(activeId);
       const estimate = trip && now - tripsFetchedAt <= LiveTransit.MAX_POSITION_AGE_MS
         ? LiveTransit.estimatedPosition(trip, now) : null;
       const located = estimate ?? (now - trackedFetchedAt <= LiveTransit.MAX_POSITION_AGE_MS
@@ -1494,23 +1587,31 @@
       const lastStop = stops.findLastIndex(stop => !stop.cancelled &&
         LiveTransit.hasLiveTime(stop.arrivalTimestampReason ?? stop.departureTimestampReason) &&
         Date.parse(stop.arrival ?? stop.departure) <= now);
-      const current = stopIndex >= 0 ? stopIndex : lastStop;
+      const current = Math.max(stopIndex, lastStop);
       const currentName = position?.from?.name ?? (trackedLeg.realTime ? stops[current]?.name : null);
       setTrackingText('trackCurrentSegment', cancelled ? 'გაუქმებულია' :
         currentName ? (position?.stopped || !position?.to?.name ? currentName : currentName + ' → ' + position.to.name) : '—');
       paintCountdown(document.getElementById('trackArrival'), arrival, now, cancelled ? '—' : null);
-      const remaining = current >= 0 && target >= current
-        ? stops.slice(current + 1, target + 1).filter(stop => !stop.cancelled).length : null;
+      const remaining = current >= 0 && target >= 0
+        ? stops.slice(current + 1, target).filter(stop => !stop.cancelled).length : null;
       setTrackingText('trackRemaining', cancelled || remaining === null ? '—' : String(remaining));
+      const moving = Boolean(position && !position.stopped && current >= 0);
+      const next = moving ? stops.findIndex((stop, index) => index > current && !stop.cancelled) : current;
       document.querySelectorAll('[data-route-stop]').forEach(row => {
         const index = Number(row.dataset.routeStop);
-        row.classList.toggle('current', !cancelled && index === current);
-        row.classList.toggle('passed', !cancelled && index < current);
-        if (!cancelled && index === current) row.setAttribute('aria-current', 'step');
+        const highlighted = !cancelled && index === next;
+        row.classList.toggle('current', highlighted);
+        row.classList.toggle('passed', !cancelled && (index < current || (moving && index === current)));
+        if (highlighted) row.setAttribute('aria-current', 'step');
         else row.removeAttribute('aria-current');
+        const label = highlighted ? (moving ? 'შემდეგი' : 'მიმდინარე') : index === target ? 'სამიზნე' : '';
+        const meta = row.querySelector('[data-route-label]');
+        if (meta.textContent !== label) meta.textContent = label;
       });
-      const path = cancelled ? [] : trackedFromBoard
-        ? LiveTransit.remainingRoute(trackedRoute, position, current) : trackedRoute.points;
+      const remainingPath = !cancelled && trackedFromBoard
+        ? LiveTransit.remainingRoute(trackedRoute, position, current, routeProgressFloor) : null;
+      if (remainingPath) routeProgressFloor = remainingPath.progress;
+      const path = cancelled ? [] : trackedFromBoard ? (remainingPath?.points ?? []) : trackedRoute.points;
       if (path.length > 1) {
         if (trackedLine && trackedFromBoard) trackedLine.setLatLngs(path);
         else if (!trackedLine) trackedLine = L.polyline(path, { color: '#38bdf8', weight: 6, opacity: 0.9 }).addTo(routeOverlayLayerGroup);
@@ -1518,9 +1619,20 @@
         routeOverlayLayerGroup.removeLayer(trackedLine);
         trackedLine = null;
       }
+      if (trackedFromBoard && trackedLine && Number.isFinite(targetStop?.lat) && Number.isFinite(targetStop?.lon)) {
+        if (focusedTargetMarker) focusedTargetMarker.setLatLng([targetStop.lat, targetStop.lon]);
+        else focusedTargetMarker = L.circleMarker([targetStop.lat, targetStop.lon], {
+          radius: 6, color: '#fff', fillColor: '#0284c7', fillOpacity: 1, weight: 2
+        }).bindTooltip(escapeHTML(targetStop.name)).addTo(routeOverlayLayerGroup);
+      } else if (focusedTargetMarker) {
+        routeOverlayLayerGroup.removeLayer(focusedTargetMarker);
+        focusedTargetMarker = null;
+      }
+      updateMapFocus();
       if (!trackedFromBoard) return;
-      const meters = path.slice(1).reduce((total, point, index) => total + haversineMeters(...path[index], ...point), 0);
-      const distance = !cancelled && position?.stopped && current === target && target >= 0 ? '0 მ' : path.length > 1 ? (meters >= 1000 ? `${(meters / 1000).toFixed(1)} კმ` : `${Math.round(meters)} მ`) : '—';
+      const meters = remainingPath?.meters;
+      const distance = Number.isFinite(meters)
+        ? (meters >= 1000 ? `${(meters / 1000).toFixed(1)} კმ` : `${Math.round(meters)} მ`) : '—';
       setTrackingText('trackDistance', distance);
     }
 
@@ -1533,7 +1645,9 @@
       trackedLeg = null;
       trackedRoute = null;
       trackedLine = null;
+      focusedTargetMarker = null;
       routeOverlayLayerGroup.clearLayers();
+      updateMapFocus();
       document.getElementById('tabContentVehicleDetails').classList.add('hidden');
       document.getElementById('sidebarTabsBar').classList.remove('hidden');
       if (restoreTab) switchSidebarTab(trackingReturnTab);
@@ -1821,6 +1935,6 @@
       toastTimer = setTimeout(() => box.classList.add('hidden'), 3500);
     }
   </script>
-  <script src="journey.js?v=1"></script>
+  <script src="journey.js?v=2"></script>
 </body>
 </html>

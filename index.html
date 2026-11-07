@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>გერმანიის ტრანსპორტი — Live Transit (Transitous / MOTIS Engine)</title>
+  <title>გერმანიის ტრანსპორტი — Live Transit & Radar Engine</title>
 
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -233,11 +233,6 @@
       background: #ffffff;
       animation: blinkDot 1.2s infinite;
     }
-    .vehicle-live-dot.stopped {
-      animation: none !important;
-      background: #fde047;
-      opacity: 1;
-    }
     @keyframes blinkDot {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.35; }
@@ -292,7 +287,7 @@
               </h1>
               <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                 <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
-                MOTIS LIVE
+                LIVE RADAR
               </span>
             </div>
             <div class="flex items-center gap-1 text-[11px] text-slate-400 hidden sm:flex">
@@ -378,12 +373,12 @@
         <div class="absolute top-3 left-14 z-[400] flex items-center gap-2 pointer-events-auto">
           <button
             onclick="refreshMapViewData(true)"
-            class="px-2.5 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-200 text-[11px] font-semibold border border-slate-700/80 shadow-lg flex items-center gap-1.5 transition backdrop-blur-md"
+            class="px-3 py-1.5 rounded-xl bg-slate-900/95 hover:bg-slate-800 text-slate-200 text-xs font-bold border border-slate-700 shadow-2xl flex items-center gap-2 transition backdrop-blur-md"
           >
-            <svg id="scanSpinner" class="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg id="scanSpinner" class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            <span id="scanStatusText">მონაცემები ლაივშია</span>
+            <span id="scanStatusText">ტრანსპორტის განახლება</span>
           </button>
         </div>
       </div>
@@ -483,7 +478,7 @@
         <!-- TAB 2: ACTIVE MOVING VEHICLES RADAR -->
         <div id="tabContentRadar" class="hidden flex-1 flex flex-col overflow-hidden">
           <div class="p-3 bg-slate-900 border-b border-slate-800 text-xs text-slate-300">
-            აქ ნაჩვენებია ყველა ტრანსპორტი, რომელიც <b>ამ წამს რეალურად მოძრაობს</b> გერმანიის ლაივ ნაკადით.
+            აქ ნაჩვენებია ყველა ტრანსპორტი, რომელიც <b>ამ წამს რეალურად მოძრაობს</b> რუკაზე.
           </div>
           <div id="radarVehiclesList" class="flex-1 overflow-y-auto p-3 space-y-2"></div>
         </div>
@@ -525,7 +520,7 @@
               <div class="min-w-0">
                 <div class="flex items-center gap-1.5">
                   <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                  <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-400">რეალური GTFS-RT მარშრუტი</span>
+                  <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-400">ლაივ მარშრუტი</span>
                 </div>
                 <h3 id="trackDirectionTitle" class="text-sm sm:text-base font-extrabold text-white leading-tight mt-0.5 truncate">
                   მიმართულება: —
@@ -551,7 +546,7 @@
             <div class="bg-slate-950/80 rounded-xl px-3 py-2.5 text-xs space-y-1.5 border border-slate-800">
               <div class="flex items-center justify-between gap-2">
                 <span class="text-slate-400 shrink-0">სტატუსი:</span>
-                <span id="trackCurrentSegment" class="font-bold text-white text-right truncate">მოძრაობს რელსებზე</span>
+                <span id="trackCurrentSegment" class="font-bold text-white text-right truncate">მოძრაობს მარშრუტზე</span>
               </div>
               <div class="flex items-center justify-between gap-2">
                 <span class="text-slate-400 shrink-0">სამიზნე გაჩერება:</span>
@@ -561,7 +556,7 @@
           </div>
 
           <div class="px-4 py-2 bg-slate-950/50 border-b border-slate-800 text-[11px] font-bold text-slate-400">
-            <span>მარშრუტის ყველა გაჩერება (რეალური დაგვიანებებით):</span>
+            <span>მარშრუტის ყველა გაჩერება:</span>
           </div>
           <div id="trackStopsTimeline" class="flex-1 overflow-y-auto p-3 space-y-1.5 text-xs"></div>
         </div>
@@ -594,8 +589,6 @@
         </div>
 
         <div class="settings-scroll-body p-6 space-y-6">
-
-          <!-- 1. STARTUP STOP -->
           <div class="space-y-3 bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <label class="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-blue-400">
@@ -605,16 +598,13 @@
                 აქტიურია: ავტომატური GPS მდებარეობა
               </span>
             </div>
-            <p class="text-xs text-slate-400 leading-relaxed">
-              გვერდის გახსნისას ავტომატურად ირთვება შენი GPS მდებარეობა და იტვირთება უახლოესი გაჩერება. ქვემოთ შეგიძლია დააყენო ნებისმიერი სასურველი ფიქსირებული გაჩერებაც.
-            </p>
             <div class="relative max-w-xl">
               <div class="flex flex-col sm:flex-row gap-2">
                 <div class="relative flex-1">
                   <input
                     id="settingsStartupStopInput"
                     type="text"
-                    placeholder="ჩაწერე გაჩერების სახელი (მაგ: Zentralhaltestelle, Berlin Hbf)..."
+                    placeholder="ჩაწერე გაჩერების სახელი..."
                     class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
                     autocomplete="off"
                   />
@@ -630,11 +620,10 @@
             </div>
           </div>
 
-          <!-- 2. TRANSPORT TYPES -->
           <div class="space-y-3 border-t border-slate-800 pt-5">
             <div class="flex items-center justify-between">
               <label class="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-slate-300">
-                2. რომელი ტრანსპორტი ჩანდეს რუკაზე და ტაბლოზე:
+                2. ტრანსპორტის ტიპები:
               </label>
               <button onclick="enableAllTransportTypes()" class="text-xs text-blue-400 hover:underline font-bold">ყველას ჩართვა</button>
             </div>
@@ -657,24 +646,6 @@
               </button>
             </div>
           </div>
-
-          <!-- 3. THEME -->
-          <div class="space-y-3 border-t border-slate-800 pt-5">
-            <label class="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-slate-300 block">
-              3. რუკის და გვერდის ვიზუალური პარამეტრები:
-            </label>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <button onclick="toggleStopsVisibilityOnMap()" class="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs sm:text-sm font-semibold text-slate-200 flex items-center justify-between transition">
-                <span>გაჩერებების ჩვენება რუკაზე</span>
-                <span id="stopsVisibilityLabel" class="text-emerald-400 font-bold">ჩართულია</span>
-              </button>
-              <button onclick="toggleFullAppTheme()" class="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs sm:text-sm font-semibold text-slate-200 flex items-center justify-between transition">
-                <span>თემა (მუქი / ნათელი)</span>
-                <span id="mapStyleLabel" class="text-blue-400 font-bold">მუქი თემა</span>
-              </button>
-            </div>
-          </div>
-
         </div>
 
         <div class="flex items-center justify-end border-t border-slate-800 px-6 py-4 shrink-0">
@@ -686,17 +657,13 @@
       </div>
     </div>
 
-    <!-- TOAST -->
-    <div id="toastBox" class="hidden fixed top-16 right-4 z-50 px-4 py-2.5 rounded-xl bg-slate-900/95 border border-blue-500/60 text-white text-xs font-semibold shadow-2xl flex items-center gap-2">
-      <span id="toastText"></span>
-    </div>
+    <div id="toastBox" class="hidden fixed top-16 right-4 z-50 px-4 py-2.5 rounded-xl bg-slate-900/95 border border-blue-500/60 text-white text-xs font-semibold shadow-2xl"></div>
 
   </div>
 
-  <!-- APPLICATION LOGIC: TRANSITOUS (MOTIS 2) API ENGINE -->
   <script>
     /*************************************************************************
-     * 1. SUPABASE CLIENT (Background Sync for Favorites)
+     * 1. SUPABASE CLIENT
      *************************************************************************/
     const SUPABASE_URL = 'https://lgcbpklqdfpdybbbchde.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxnY2Jwa2xxZGZwZHliYmJjaGRlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgyNzcyOTIsImV4cCI6MjEwMzg1MzI5Mn0.3EOQMNOPnCzdIwIEDYiLNC4nhEEYS1XzCPY7273UxvE';
@@ -709,11 +676,15 @@
     } catch (err) {}
 
     /*************************************************************************
-     * 2. TRANSITOUS (MOTIS 2) API CLIENT
+     * 2. MULTI-SOURCE TRANSIT & RADAR ENGINE (MOTIS + HAFAS FALLBACK)
      *************************************************************************/
     const TRANSITOUS_BASE = 'https://api.transitous.org';
+    const HAFAS_ENDPOINTS = [
+      'https://v6.db.transport.rest',
+      'https://v5.db.transport.rest'
+    ];
 
-    async function safeFetchJSON(url, timeoutMs = 5000) {
+    async function safeFetchJSON(url, timeoutMs = 4500) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
       try {
@@ -730,8 +701,20 @@
       }
     }
 
+    async function queryHafasRadar(north, west, south, east) {
+      for (const base of HAFAS_ENDPOINTS) {
+        const url = `${base}/radar?north=${north}&west=${west}&south=${south}&east=${east}&results=60&duration=60&frames=12&polylines=true`;
+        const data = await safeFetchJSON(url, 4000);
+        if (data) {
+          const movements = Array.isArray(data) ? data : (data.movements || []);
+          if (movements.length > 0) return movements;
+        }
+      }
+      return [];
+    }
+
     /*************************************************************************
-     * 3. PURE SVG ICONS & TRANSPORT FORMATTER
+     * 3. SVG ICONS & FORMATTER
      *************************************************************************/
     const TRANSPORT_SVGS = {
       tram: `<svg class="w-3.5 h-3.5 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 3h8M12 3v3m-5 0h10a2 2 0 012 2v8a2 2 0 01-2 2H7a2 2 0 01-2-2V8a2 2 0 012-2zm2 12l-1.5 3m7.5-3l1.5 3M8 11h8"/></svg>`,
@@ -817,10 +800,8 @@
       await loadFavoritesFromSupabase();
       await initializeStartupStopOrGpsLocation();
 
-      // Smooth 800ms GPS / Real-Time tick loop
       setInterval(updateRealTimePositionsAndCountdowns, 800);
 
-      // Refresh live departures & active radar every 15 seconds
       setInterval(() => {
         if (selectedStop) refreshSelectedStopDepartures(true);
         refreshMapViewData(false);
@@ -843,7 +824,6 @@
         } catch (e) {}
       }
 
-      // Default: Automatically detect GPS location
       await locateUserDevice(false, false);
     }
 
@@ -868,7 +848,7 @@
 
       streetTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
-        attribution: '© OpenStreetMap • Live Transit: Transitous / MOTIS 2'
+        attribution: '© OpenStreetMap • Live Transit: MOTIS & HAFAS'
       }).addTo(map);
 
       routeOverlayLayerGroup = L.layerGroup().addTo(map);
@@ -882,19 +862,14 @@
         clearTimeout(moveTimeout);
         moveTimeout = setTimeout(() => {
           refreshMapViewData(false);
-        }, 400);
+        }, 350);
       });
     }
 
     async function renderGermanyBoundaryMask() {
       const worldOuterRing = [[-90, -180], [90, -180], [90, 180], [-90, 180]];
       germanyMaskLayer = L.polygon([worldOuterRing, GERMANY_FALLBACK_RING], {
-        color: '#3b82f6',
-        weight: 2.5,
-        opacity: 0.85,
-        fillColor: '#03060c',
-        fillOpacity: 0.86,
-        interactive: false
+        color: '#3b82f6', weight: 2.5, opacity: 0.85, fillColor: '#03060c', fillOpacity: 0.86, interactive: false
       }).addTo(map);
     }
 
@@ -955,7 +930,7 @@
     }
 
     async function fallbackToDefaultLocation() {
-      const defaultStop = { id: 'de:14511:1', name: 'Chemnitz, Zentralhaltestelle', location: { latitude: 50.83230, longitude: 12.92225 } };
+      const defaultStop = { id: '8011306', name: 'Chemnitz, Zentralhaltestelle', location: { latitude: 50.83230, longitude: 12.92225 } };
       document.getElementById('activeAreaSubtitle').textContent = defaultStop.name;
       map.setView([defaultStop.location.latitude, defaultStop.location.longitude], 15);
       await selectStop(defaultStop, false);
@@ -963,22 +938,22 @@
     }
 
     /*************************************************************************
-     * 6. REFRESH MAP VIEW (Loads ALL Stops & Live Vehicles from Transitous API)
+     * 6. REFRESH MAP VIEW (MOTIS + HAFAS Radar Dual Fallback)
      *************************************************************************/
     async function refreshMapViewData(manualTrigger = false) {
       const zoom = map.getZoom();
-      if (zoom < 12 && !manualTrigger) return;
+      if (zoom < 11 && !manualTrigger) return;
 
       const spinner = document.getElementById('scanSpinner');
       const statusText = document.getElementById('scanStatusText');
       if (spinner) spinner.classList.add('animate-spin');
-      if (statusText) statusText.textContent = 'იტვირთება გაჩერებები და ტრანსპორტი...';
+      if (statusText) statusText.textContent = 'იტვირთება ლაივ ტრანსპორტი...';
 
       const b = map.getBounds();
       const min = `${b.getSouth().toFixed(4)},${b.getWest().toFixed(4)}`;
       const max = `${b.getNorth().toFixed(4)},${b.getEast().toFixed(4)}`;
 
-      // 1. Fetch ALL official stops in viewport
+      // 1. Fetch Stops
       const stopsData = await safeFetchJSON(`${TRANSITOUS_BASE}/api/v1/map/stops?min=${min}&max=${max}`);
       if (Array.isArray(stopsData)) {
         stopsData.forEach(st => {
@@ -994,18 +969,17 @@
         });
       }
 
-      // 2. Fetch live moving trips with exact track polylines
-      const startTime = new Date(Date.now() - 90000).toISOString();
-      const endTime = new Date(Date.now() + 300000).toISOString();
+      const nowMs = Date.now();
+      let foundTripsCount = 0;
+
+      // 2. Try MOTIS Trips API
+      const startTime = new Date(nowMs - 120000).toISOString();
+      const endTime = new Date(nowMs + 600000).toISOString();
       const tripsData = await safeFetchJSON(`${TRANSITOUS_BASE}/api/v5/map/trips?min=${min}&max=${max}&startTime=${startTime}&endTime=${endTime}&zoom=${zoom}`);
 
-      if (Array.isArray(tripsData)) {
-        const nowMs = Date.now();
+      if (Array.isArray(tripsData) && tripsData.length > 0) {
         tripsData.forEach(trip => {
           if (!trip || !trip.tripId) return;
-          // STRICT REALTIME CHECK: Skip non-realtime phantom/scheduled entries if specified
-          if (trip.realTime === false && trip.isLive === false) return;
-
           const polyCoords = [];
           if (trip.geometry && Array.isArray(trip.geometry.points)) {
             trip.geometry.points.forEach(pt => {
@@ -1024,7 +998,37 @@
             cancelled: Boolean(trip.cancelled),
             fetchedAt: nowMs
           });
+          foundTripsCount++;
         });
+      }
+
+      // 3. FALLBACK: If MOTIS didn't return live vehicles for this area, query HAFAS Radar!
+      if (foundTripsCount === 0) {
+        const radarMovements = await queryHafasRadar(b.getNorth().toFixed(4), b.getWest().toFixed(4), b.getSouth().toFixed(4), b.getEast().toFixed(4));
+        if (Array.isArray(radarMovements)) {
+          radarMovements.forEach(mov => {
+            if (!mov || !mov.tripId) return;
+            const polyCoords = [];
+            if (mov.polyline && Array.isArray(mov.polyline.features)) {
+              mov.polyline.features.forEach(feat => {
+                if (feat.geometry && feat.geometry.type === 'Point') {
+                  const [lng, lat] = feat.geometry.coordinates;
+                  polyCoords.push([lat, lng]);
+                }
+              });
+            }
+
+            activeTripsCache.set(mov.tripId, {
+              tripId: mov.tripId,
+              polyCoords,
+              stopovers: Array.isArray(mov.nextStopovers) ? mov.nextStopovers : [],
+              line: mov.line || { name: 'Transit', product: 'bus' },
+              direction: mov.direction || '',
+              radarLocation: mov.location || null,
+              fetchedAt: nowMs
+            });
+          });
+        }
       }
 
       if (spinner) spinner.classList.remove('animate-spin');
@@ -1081,7 +1085,7 @@
     }
 
     /*************************************************************************
-     * 7. SELECT STOP & FETCH LIVE STOP TIMES (With Precise Delays)
+     * 7. SELECT STOP & FETCH LIVE DEPARTURES
      *************************************************************************/
     async function selectStop(stop, panToStop = true) {
       const prevId = selectedStop ? String(selectedStop.id) : null;
@@ -1115,7 +1119,7 @@
         listEl.innerHTML = `
           <div class="py-10 text-center space-y-3">
             <div class="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-            <p class="text-xs text-slate-400">იტვირთება ${selectedStop.name}-ის რეალური განრიგი და დაგვიანებები...</p>
+            <p class="text-xs text-slate-400">იტვირთება ${selectedStop.name}-ის რეალური განრიგი...</p>
           </div>
         `;
       }
@@ -1135,8 +1139,6 @@
           const scheduledDep = place.scheduledDeparture || place.departure || item.scheduledDeparture;
           const realDep = place.departure || scheduledDep;
           const isCancelled = Boolean(place.cancelled || item.cancelled);
-
-          // Calculate exact delay in seconds
           const delaySec = (new Date(realDep).getTime() - new Date(scheduledDep).getTime()) / 1000;
 
           return {
@@ -1237,7 +1239,6 @@
     function updateRealTimePositionsAndCountdowns() {
       const nowMs = Date.now();
 
-      // Clock
       const clockEl = document.getElementById('deClock');
       if (clockEl) {
         clockEl.textContent = new Date().toLocaleTimeString('de-DE', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -1280,6 +1281,14 @@
     }
 
     function computeTripPosition(entry, nowMs) {
+      if (entry.radarLocation && entry.radarLocation.latitude) {
+        return {
+          lat: entry.radarLocation.latitude,
+          lng: entry.radarLocation.longitude,
+          statusText: entry.direction ? `მიემართება: ${entry.direction}` : 'მოძრაობს'
+        };
+      }
+
       const stops = entry.stopovers || [];
       if (stops.length < 2 || entry.polyCoords.length < 2) return null;
 
@@ -1287,8 +1296,8 @@
         const curr = stops[i];
         const next = stops[i + 1];
 
-        const depTime = curr.departure || curr.scheduledDeparture;
-        const arrTime = next.arrival || next.scheduledArrival;
+        const depTime = curr.departure || curr.scheduledDeparture || curr.time;
+        const arrTime = next.arrival || next.scheduledArrival || next.time;
         if (!depTime || !arrTime) continue;
 
         const depMs = new Date(depTime).getTime();
@@ -1301,11 +1310,20 @@
           return {
             lat: pt.lat,
             lng: pt.lng,
-            isStopped: false,
-            statusText: `${curr.name || 'გაჩერება'} → ${next.name || 'გაჩერება'}`
+            statusText: `${curr.name || ''} → ${next.name || ''}`
           };
         }
       }
+
+      // If outside stop times but polyline exists, place vehicle at start of polyline
+      if (entry.polyCoords.length > 0) {
+        return {
+          lat: entry.polyCoords[0][0],
+          lng: entry.polyCoords[0][1],
+          statusText: entry.direction || 'მოძრაობს'
+        };
+      }
+
       return null;
     }
 
@@ -1378,9 +1396,9 @@
       if (!entry) return;
 
       document.getElementById('trackDirectionTitle').textContent = `მიმართულება: ${entry.direction}`;
-      document.getElementById('trackStopsTimeline').innerHTML = entry.stopovers.map((st, idx) => `
+      document.getElementById('trackStopsTimeline').innerHTML = (entry.stopovers || []).map((st, idx) => `
         <div class="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-slate-200">
-          <span>${idx + 1}. ${st.name || 'გაჩერება'}</span>
+          <span>${idx + 1}. ${st.name || st.stop?.name || 'გაჩერება'}</span>
           <span class="font-mono text-xs text-blue-400">${st.departure ? new Date(st.departure).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : ''}</span>
         </div>
       `).join('');
@@ -1571,21 +1589,6 @@
           state.className = active ? 'text-[11px] text-emerald-400 font-semibold' : 'text-[11px] text-slate-500 font-semibold';
         }
       });
-    }
-
-    function toggleStopsVisibilityOnMap() {
-      showStopsOnMap = !showStopsOnMap;
-      if (showStopsOnMap) map.addLayer(stopsLayerGroup);
-      else map.removeLayer(stopsLayerGroup);
-      document.getElementById('stopsVisibilityLabel').textContent = showStopsOnMap ? 'ჩართულია' : 'დამალულია';
-    }
-
-    function toggleFullAppTheme() {
-      isLightTheme = !isLightTheme;
-      document.documentElement.classList.toggle('dark', !isLightTheme);
-      document.documentElement.classList.toggle('light', isLightTheme);
-      document.getElementById('map').classList.toggle('map-tiles-dark', !isLightTheme);
-      document.getElementById('mapStyleLabel').textContent = isLightTheme ? 'ნათელი თემა' : 'მუქი თემა';
     }
 
     function setupSettingsStartupStopSearch() {

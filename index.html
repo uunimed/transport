@@ -203,15 +203,6 @@
     .vehicle-marker-container {
       will-change: transform;
     }
-    .vehicle-pill {
-      display: flex; width: max-content; align-items: center; gap: 4px; padding: 3px 7px 3px 4px;
-      border-radius: 9px; background: #0b1324; color: #fff; white-space: nowrap;
-      font-size: 11px; font-weight: 800; border: 2px solid var(--vehicle-color);
-      box-shadow: 0 2px 7px #0009; transform: translate(-50%, -50%); cursor: pointer;
-    }
-    .vehicle-pill > span { display: grid; place-items: center; border-radius: 5px; padding: 2px; background: var(--vehicle-color); }
-    .vehicle-pill.estimated { border-style: dashed; }
-    .vehicle-pill:hover { transform: translate(-50%, -50%) scale(1.12); }
     .vehicle-tooltip-heading { font-weight: 800; }
     .vehicle-tooltip-stops { display: flex; align-items: center; gap: .3rem; color: #60a5fa; }
     @keyframes blinkDot {
@@ -267,17 +258,113 @@
     .tracking-summary > div { border: 1px solid #475569; border-radius: .65rem; padding: .5rem .3rem; text-align: center; }
     .tracking-summary dt { font-size: .65rem; opacity: .85; }
     .tracking-summary dd { font-size: .9rem; font-weight: 800; margin-top: .25rem; }
-    .tracking-stop { border-left: 3px solid #475569; }
-    .tracking-stop.target { border-left-color: #60a5fa; color: #60a5fa; }
-    .tracking-stop.current { box-shadow: inset 0 0 0 1px #34d399; }
-    .tracking-stop.current .tracking-dot { color: #34d399; animation: blinkDot 1.2s infinite; }
-    @media (prefers-reduced-motion: reduce) { .tracking-stop.current .tracking-dot { animation: none; } }
     @media (max-width: 420px) {
       .departure-card { grid-template-columns: auto minmax(0, 1fr) auto; gap: .4rem; padding: .65rem .45rem; }
       .departure-line { font-size: .78rem; gap: .2rem; }
       .departure-main { padding-left: .4rem; }
       .departure-count { font-size: .78rem; }
       .departure-count small { font-size: .55rem; }
+    }
+
+    :root {
+      --ui-surface: #111c2d; --ui-raised: #19273c; --ui-ink: #f0f5fb; --ui-muted: #a9b8cc;
+      --ui-border: #34465f; --ui-accent: #82bbff; --ui-positive: #56e4aa;
+    }
+    html.light {
+      --ui-surface: #fff; --ui-raised: #edf4fc; --ui-ink: #17263b; --ui-muted: #475b74;
+      --ui-border: #c8d7e8; --ui-accent: #145bb8; --ui-positive: #047550;
+    }
+    html.light :is(.text-slate-500,.text-slate-400,.text-slate-300,.placeholder-slate-400) { color: var(--ui-muted) !important; }
+    html.light :is(.text-blue-300,.text-blue-400):not(.brand-tram) { color: var(--ui-accent) !important; }
+    html.light :is(.text-emerald-300,.text-emerald-400) { color: var(--ui-positive) !important; }
+    html.light .text-amber-300 { color: #854400 !important; }
+    html.light :is(.bg-blue-600,.bg-blue-500,.bg-rose-600,.bg-emerald-600).text-white { color: #fff !important; }
+    html.light .departure-chip { background: #e4edf7; color: #304863; }
+    html.light .departure-chip.good { background: #dcf7eb; color: #075b3f; }
+    html.light .departure-chip.warn { background: #fff1d3; color: #794500; }
+    html.light .departure-chip.error { background: #ffe5e8; color: #99263b; }
+    html.light .leaflet-tooltip.custom-tooltip { background: #fff; color: #17263b; border-color: #a6bbd4; }
+    html.light .vehicle-tooltip-stops { color: #145bb8; }
+    html.light .departure-line { color: color-mix(in srgb, var(--line-color), #101820 25%) !important; }
+    html.light .hover\:bg-slate-800:hover { background-color: #dfeafb !important; }
+
+    .settings-panel { border: 1px solid var(--ui-border); background: var(--ui-surface); border-radius: 1rem; padding: 1rem; }
+    #confirmStartupStop:disabled { opacity: .42; cursor: default; }
+    .transport-toggle {
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .45rem;
+      min-height: 5rem; padding: .55rem .3rem; text-align: center; font-size: .75rem; font-weight: 750;
+      background: var(--ui-surface); color: var(--ui-muted); border: 1px solid var(--ui-border); border-radius: .8rem;
+    }
+    .transport-toggle-icon svg { width: 1.65rem; height: 1.65rem; }
+    .transport-toggle[aria-pressed="true"] {
+      color: var(--ui-ink); border-color: var(--transport-color);
+      background: color-mix(in srgb, var(--ui-surface), var(--transport-color) 16%);
+    }
+    .transport-toggle[aria-pressed="true"] .transport-toggle-icon { color: var(--transport-color); }
+    #typeToggle-tram { --transport-color: #ee555c; }
+    #typeToggle-bus { --transport-color: #8b5cf6; }
+    #typeToggle-suburban { --transport-color: #0da678; }
+    #typeToggle-regional { --transport-color: #4281e9; }
+
+    .vehicle-pill {
+      --pin-surface: #101a2c; display: inline-flex; align-items: center; width: max-content;
+      gap: .25rem; height: 28px; padding: 2px 8px 2px 2px; background: var(--pin-surface);
+      color: white; border: 1px solid #d8e8ff70; border-radius: 999px;
+      box-shadow: 0 3px 8px #0008; font-size: 10px; font-weight: 800;
+      transform: translate(-14px, -50%);
+    }
+    .vehicle-pill > span {
+      display: grid; place-items: center; width: 22px; height: 22px; padding: 0;
+      border-radius: 50%; color: white; background: var(--vehicle-color);
+    }
+    .vehicle-pill.estimated { border-style: dashed; }
+    .vehicle-pill:hover { transform: translate(-14px, -50%) scale(1.08); }
+    html.light .vehicle-pill { --pin-surface: #fff; color: #17263b; border-color: #71859c; }
+
+    .countdown-urgent { color: #fb7185; }
+    html.light .countdown-urgent { color: #b4233d; }
+    .countdown-urgent .countdown-seconds { animation: blinkDot .85s infinite; }
+    #trackStopsTimeline, .journey-stops { padding-left: .9rem; }
+    .tracking-stop, .journey-step {
+      position: relative; margin-left: .45rem; padding: .55rem .65rem .55rem 1.15rem;
+      border-left: 1px solid var(--ui-border); color: var(--ui-ink); border-radius: 0;
+    }
+    .tracking-dot, .journey-step::before {
+      position: absolute; left: -.28rem; top: .85rem; width: .55rem; height: .55rem; content: '';
+      border: 1px solid var(--ui-muted); background: var(--ui-surface); border-radius: 50%;
+    }
+    .tracking-stop.current, .journey-step.next {
+      background: var(--ui-raised); box-shadow: none; border-left: 2px solid var(--ui-positive);
+      border-radius: 0 .65rem .65rem 0; font-weight: 800;
+    }
+    .tracking-stop.current .tracking-dot { background: var(--ui-positive); border-color: var(--ui-positive); animation: blinkDot 1.2s infinite; }
+    .tracking-stop.target { color: var(--ui-accent); }
+    .tracking-stop.target .tracking-dot { border-color: var(--ui-accent); }
+    .tracking-stop.passed, .journey-step.passed { opacity: .56; }
+    .tracking-stop.passed.target { opacity: 1; }
+
+    .journey-form, .journey-card, .journey-leg, .journey-detail-header {
+      background: var(--ui-surface); color: var(--ui-ink); border: 1px solid var(--ui-border);
+      border-radius: .9rem; padding: .8rem;
+    }
+    .journey-form { display: grid; gap: .55rem; }
+    .journey-form label { display: block; font-size: .75rem; color: var(--ui-muted); margin-bottom: .25rem; }
+    .journey-form input { width: 100%; color: var(--ui-ink); background: var(--ui-raised); border: 1px solid var(--ui-border); border-radius: .55rem; padding: .45rem .6rem; font-size: .85rem; }
+    .journey-primary, .journey-secondary { border: 1px solid var(--ui-border); border-radius: .55rem; padding: .45rem .65rem; font-size: .77rem; font-weight: 750; }
+    .journey-primary { color: #fff; background: #1d5cc2; border-color: #1d5cc2; }
+    .journey-secondary { color: var(--ui-accent); background: var(--ui-raised); }
+    .journey-primary:disabled { opacity: .45; }
+    .stop-picker { position: absolute; top: 100%; inset-inline: 0; z-index: 15; margin-top: .15rem; background: var(--ui-surface); color: var(--ui-ink); border: 1px solid var(--ui-border); border-radius: .6rem; padding: .15rem; }
+    .stop-picker-option { display: flex; justify-content: space-between; gap: .4rem; width: 100%; text-align: left; padding: .5rem; font-size: .75rem; }
+    .stop-picker-option:hover, .stop-picker-option:focus-visible { background: var(--ui-raised); }
+    .stop-picker-option small, .journey-muted { color: var(--ui-muted); }
+    .journey-card { display: grid; gap: .25rem; width: 100%; text-align: left; }
+    .journey-card:hover { background: var(--ui-raised); border-color: var(--ui-accent); }
+    .journey-transfer { color: var(--ui-accent); font-weight: 750; font-size: .75rem; }
+    .journey-step.next { font-size: 1.05em; }
+    .journey-step.next::before { background: var(--ui-positive); border-color: var(--ui-positive); }
+    @media (prefers-reduced-motion: reduce) {
+      .countdown-urgent .countdown-seconds, .tracking-stop.current .tracking-dot { animation: none; }
     }
   </style>
 </head>
@@ -293,10 +380,9 @@
         <!-- Brand Title with SVG Icon -->
         <div class="flex items-center gap-2.5 shrink-0">
           <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex items-center justify-center shadow-md border border-blue-500/40 shrink-0 relative overflow-hidden">
-            <svg class="w-6 h-6 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-              <circle cx="12" cy="12" r="9" stroke-dasharray="3 2" class="text-emerald-400" />
-              <path stroke-linecap="round" stroke-linejoin="round" d="M7 9c0-1.657 2.239-3 5-3s5 1.343 5 3v5a2 2 0 01-2 2H9a2 2 0 01-2-2V9z" fill="currentColor" fill-opacity="0.2" />
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9 16l-1.5 2.5M15 16l1.5 2.5M7 12h10M9.5 9.5h.01M14.5 9.5h.01" />
+            <svg class="brand-tram h-7 w-7 text-sky-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m8 5 4-3 4 3m-4-3v5M7 20l-2 2m12-2 2 2M6 22h12"/>
+              <rect x="5" y="7" width="14" height="12" rx="3"/><path d="M5 13h14m-11 3h.01m7.99 0h.01"/>
             </svg>
           </div>
           <div>
@@ -363,14 +449,13 @@
           </button>
 
           <button
-            onclick="openSettingsModal()"
+            onclick="openSettingsModal()" aria-label="პარამეტრები" title="პარამეტრები"
             class="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-bold shadow-lg shadow-blue-600/20 flex items-center gap-1.5 transition"
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
-            <span>პარამეტრები</span>
           </button>
         </div>
 
@@ -414,6 +499,9 @@
             </svg>
             <span>გაჩერების ტაბლო</span>
             <span id="departuresCountBadge" class="px-1.5 py-0.2 rounded-full text-[10px] bg-blue-600/30 text-blue-300">0</span>
+          </button>
+          <button id="tabJourneyBtn" type="button" onclick="switchSidebarTab('journey')" class="sidebar-tab flex-1">
+            <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="5" cy="18" r="2"/><circle cx="19" cy="6" r="2"/><path d="M7 18h8a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h8"/></svg><span>მგზავრობა</span>
           </button>
           <button
             id="tabFavoritesBtn"
@@ -467,17 +555,29 @@
             </div>
           </div>
 
-          <div class="px-3.5 py-2 bg-blue-950/40 border-b border-blue-900/40 text-[11px] text-blue-300 flex items-center gap-1.5">
-            <svg class="w-3.5 h-3.5 text-blue-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
-            <span>დააჭირე ნებისმიერ ტრანსპორტს მისი ზუსტი მარშრუტის სანახავად</span>
-          </div>
-
           <div id="departuresList" class="flex-1 overflow-y-auto p-3 space-y-2"></div>
         </div>
 
-        <!-- TAB 3: FAVORITES -->
+        <section id="tabContentJourney" class="hidden flex-1 flex flex-col overflow-y-auto p-3 space-y-3" aria-label="მგზავრობა">
+          <form id="journeyForm" class="journey-form">
+            <div class="relative">
+              <label for="journeyFrom">საიდან</label>
+              <input id="journeyFrom" type="text" autocomplete="off" placeholder="საწყისი გაჩერება">
+              <div id="journeyFromOptions" class="stop-picker hidden"></div>
+            </div>
+            <div class="relative">
+              <label for="journeyTo">სად</label>
+              <input id="journeyTo" type="text" autocomplete="off" placeholder="სამიზნე გაჩერება">
+              <div id="journeyToOptions" class="stop-picker hidden"></div>
+            </div>
+            <button type="submit" class="journey-primary">ძებნა</button>
+          </form>
+          <p id="journeyStatus" class="text-xs text-slate-400" role="status"></p>
+          <div id="journeyResults" class="space-y-2"></div>
+          <div id="journeyDetails" class="hidden space-y-3"></div>
+        </section>
+
+        <!-- FAVORITES -->
         <div id="tabContentFavorites" class="hidden flex-1 flex flex-col overflow-hidden">
           <div class="p-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
             <span class="text-xs text-slate-300">შენახული გაჩერებები:</span>
@@ -521,6 +621,7 @@
               </div>
             </div>
 
+            <div id="trackedStopSummary" class="space-y-3">
             <dl class="tracking-summary">
               <div><dt>მოსვლამდე</dt><dd id="trackArrival">—</dd></div>
               <div><dt>დარჩენილი მანძილი</dt><dd id="trackDistance">—</dd></div>
@@ -530,6 +631,7 @@
               <div class="flex justify-between gap-2"><dt class="text-slate-400">ამჟამინდელი მდებარეობა</dt><dd id="trackCurrentSegment" class="text-right font-bold">—</dd></div>
               <div class="flex justify-between gap-2"><dt class="text-slate-400">სამიზნე გაჩერება</dt><dd id="trackTarget" class="text-right font-bold text-blue-400">—</dd></div>
             </dl>
+            </div>
           </div>
 
           <div class="px-4 py-2 bg-slate-950/50 border-b border-slate-800 text-[11px] font-bold text-slate-400">
@@ -565,14 +667,6 @@
         </div>
 
         <div class="settings-scroll-body p-6 space-y-6">
-          <div class="flex items-center justify-between gap-3">
-            <label for="themeSelect" class="text-sm font-bold text-slate-300">თემა</label>
-            <select id="themeSelect" onchange="setTheme(this.value)"
-              class="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200">
-              <option value="light">ღია</option>
-              <option value="dark" selected>მუქი</option>
-            </select>
-          </div>
           <div class="space-y-3 bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <label class="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-blue-400">
@@ -588,14 +682,14 @@
                   <input
                     id="settingsStartupStopInput"
                     type="text"
-                    placeholder="ჩაწერე გაჩერების სახელი..."
+                    placeholder="გაჩერების სახელი" aria-label="გაჩერების სახელი"
                     class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
                     autocomplete="off"
                   />
                   <div id="settingsStartupDropdown" class="hidden absolute left-0 right-0 top-full mt-1 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-50 max-h-60 overflow-y-auto"></div>
                 </div>
-                <button onclick="saveTypedStartupStopFromSettings()" class="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-extrabold shrink-0 transition">
-                  საწყისად დაყენება
+                <button id="confirmStartupStop" onclick="confirmStartupStop()" disabled class="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-extrabold shrink-0 transition">
+                  დადასტურება
                 </button>
                 <button onclick="resetToAutoGpsStartup()" class="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-emerald-400 text-xs font-bold shrink-0 transition">
                   GPS-ზე დაბრუნება
@@ -604,7 +698,7 @@
             </div>
           </div>
 
-          <div class="space-y-3 border-t border-slate-800 pt-5">
+          <div class="settings-panel space-y-3">
             <div class="flex items-center justify-between">
               <label class="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-slate-300">
                 Verkehrsmittel
@@ -612,23 +706,31 @@
               <button onclick="enableAllTransportTypes()" class="text-xs text-blue-400 hover:underline font-bold">Alle aktivieren</button>
             </div>
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <button id="typeToggle-tram" onclick="toggleTransportTypeSetting('tram')" class="p-3.5 rounded-xl border border-red-500/60 bg-red-500/15 text-white flex flex-col items-center gap-1.5 transition">
-                <span class="text-xs sm:text-sm font-bold"><span id="typeIcon-tram" aria-hidden="true"></span>Straßenbahn</span>
-                <span id="typeState-tram" class="text-[11px] text-emerald-400 font-semibold">Aktiv</span>
+              <button id="typeToggle-tram" onclick="toggleTransportTypeSetting('tram')" class="transport-toggle" type="button">
+                <span class="transport-toggle-icon" id="typeIcon-tram" aria-hidden="true"></span>
+                <span>Straßenbahn</span>
               </button>
-              <button id="typeToggle-bus" onclick="toggleTransportTypeSetting('bus')" class="p-3.5 rounded-xl border border-violet-500/60 bg-violet-500/15 text-white flex flex-col items-center gap-1.5 transition">
-                <span class="text-xs sm:text-sm font-bold"><span id="typeIcon-bus" aria-hidden="true"></span>Bus</span>
-                <span id="typeState-bus" class="text-[11px] text-emerald-400 font-semibold">Aktiv</span>
+              <button id="typeToggle-bus" onclick="toggleTransportTypeSetting('bus')" class="transport-toggle" type="button">
+                <span class="transport-toggle-icon" id="typeIcon-bus" aria-hidden="true"></span>
+                <span>Bus</span>
               </button>
-              <button id="typeToggle-suburban" onclick="toggleTransportTypeSetting('suburban')" class="p-3.5 rounded-xl border border-emerald-500/60 bg-emerald-500/15 text-white flex flex-col items-center gap-1.5 transition">
-                <span class="text-xs sm:text-sm font-bold"><span id="typeIcon-suburban" aria-hidden="true"></span>S-Bahn / U-Bahn</span>
-                <span id="typeState-suburban" class="text-[11px] text-emerald-400 font-semibold">Aktiv</span>
+              <button id="typeToggle-suburban" onclick="toggleTransportTypeSetting('suburban')" class="transport-toggle" type="button">
+                <span class="transport-toggle-icon" id="typeIcon-suburban" aria-hidden="true"></span>
+                <span>S-Bahn / U-Bahn</span>
               </button>
-              <button id="typeToggle-regional" onclick="toggleTransportTypeSetting('regional')" class="p-3.5 rounded-xl border border-blue-500/60 bg-blue-500/15 text-white flex flex-col items-center gap-1.5 transition">
-                <span class="text-xs sm:text-sm font-bold"><span id="typeIcon-regional" aria-hidden="true"></span>Zug</span>
-                <span id="typeState-regional" class="text-[11px] text-emerald-400 font-semibold">Aktiv</span>
+              <button id="typeToggle-regional" onclick="toggleTransportTypeSetting('regional')" class="transport-toggle" type="button">
+                <span class="transport-toggle-icon" id="typeIcon-regional" aria-hidden="true"></span>
+                <span>Zug</span>
               </button>
             </div>
+          </div>
+          <div class="settings-panel flex items-center justify-between gap-3">
+            <label for="themeSelect" class="text-sm font-bold text-slate-300">თემა</label>
+            <select id="themeSelect" onchange="setTheme(this.value)"
+              class="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200">
+              <option value="light">ღია</option>
+              <option value="dark" selected>მუქი</option>
+            </select>
           </div>
         </div>
 
@@ -768,6 +870,9 @@
     let departuresStatus = '';
     let stopAlerts = [];
     let trackedLeg = null;
+    let trackedFromBoard = false;
+    let activeSidebarTab = 'departures';
+    let trackingReturnTab = 'departures';
     let trackedRoute = null;
     let trackedLine = null;
     let trackedTargetId = null;
@@ -805,6 +910,7 @@
       }
       setupSearchListener();
       setupSettingsStartupStopSearch();
+      initializeJourneyPlanner();
       updateStartupStopSettingsUI();
       updateTransportTypeSettingsUI();
 
@@ -891,6 +997,21 @@
       }).addTo(map);
     }
 
+    function renderUserLocation(coords) {
+      const { latitude: lat, longitude: lng } = coords;
+      if (userLocationMarker) map.removeLayer(userLocationMarker);
+
+      userLocationMarker = L.circleMarker([lat, lng], {
+        radius: 9, color: '#ffffff', weight: 3, fillColor: '#2563eb', fillOpacity: 1
+      }).addTo(map);
+      if (locationAccuracy) map.removeLayer(locationAccuracy);
+      locationAccuracy = L.circle([lat, lng], {
+        radius: Math.max(30, coords.accuracy || 30), color: '#3b82f6', weight: 1,
+        fillOpacity: 0.16, interactive: false
+      }).addTo(map);
+      userLocationMarker.bindTooltip('თქვენი მდებარეობა', { direction: 'top', className: 'custom-tooltip' });
+    }
+
     async function locateUserDevice(manualClick = false, markerOnly = false) {
       if (!navigator.geolocation) {
         if (manualClick) showToast('მდებარეობა მიუწვდომელია.');
@@ -905,17 +1026,7 @@
           const lat = pos.coords.latitude;
           const lng = pos.coords.longitude;
 
-          if (userLocationMarker) map.removeLayer(userLocationMarker);
-
-          userLocationMarker = L.circleMarker([lat, lng], {
-            radius: 9, color: '#ffffff', weight: 3, fillColor: '#2563eb', fillOpacity: 1
-          }).addTo(map);
-          if (locationAccuracy) map.removeLayer(locationAccuracy);
-          locationAccuracy = L.circle([lat, lng], {
-            radius: Math.max(30, pos.coords.accuracy || 30), color: '#3b82f6', weight: 1,
-            fillOpacity: 0.16, interactive: false
-          }).addTo(map);
-          userLocationMarker.bindTooltip('თქვენი მდებარეობა', { direction: 'top', className: 'custom-tooltip' });
+          renderUserLocation(pos.coords);
 
           if (markerOnly) {
             if (manualClick) map.fitBounds(locationAccuracy.getBounds(), { maxZoom: 16, padding: [35, 35] });
@@ -1126,17 +1237,22 @@
       return `${Math.floor(seconds / 60)} წთ ${String(seconds % 60).padStart(2, '0')} წმ`;
     }
 
+    function paintCountdown(element, time, now, label = null) {
+      const text = label ?? formatCountdown(time, now);
+      const urgent = label === null && time > now && Math.ceil((time - now) / 1000) < 60;
+      element.classList.toggle('countdown-urgent', urgent);
+      if (element.textContent === text && Boolean(element.firstElementChild) === urgent) return;
+      if (urgent) element.innerHTML = `0 წთ <span class="countdown-seconds">${text.slice(5)}</span>`;
+      else element.textContent = text;
+    }
+
     function updateDepartureCountdowns() {
       const now = Date.now();
       document.querySelectorAll('[data-board-trip]').forEach(row => {
         const position = markerPositions.get(row.dataset.boardTrip);
         const atStop = position?.stopped && (position.from?.stopId === row.dataset.stopId ||
           position.from?.parentId === selectedStop?.id);
-        row.querySelector('[data-countdown]').textContent = atStop ? 'გაჩერებაზეა' :
-          formatCountdown(Number(row.dataset.arrival), now);
-        const mapLabel = row.querySelector('[data-map-label]');
-        mapLabel.classList.toggle('on-map', !!position);
-        mapLabel.textContent = position ? 'რუკაზე ჩანს' : 'ხაზის ნახვა';
+        paintCountdown(row.querySelector('[data-countdown]'), Number(row.dataset.arrival), now, atStop ? 'გაჩერებაზეა' : null);
       });
     }
 
@@ -1157,9 +1273,9 @@
         const when = Date.parse(dep.when ? (dep.arrival ?? dep.when) : null);
         return `
           <div>
-            <button type="button" onclick="openVehicleInSidebar('${tripClick(dep.tripId)}')"
+            <button type="button" onclick="openVehicleInSidebar('${tripClick(dep.tripId)}', true)"
               class="departure-card" ${cancelled ? '' : `data-board-trip="${escapeHTML(dep.tripId)}" data-stop-id="${escapeHTML(dep.stopId)}" data-arrival="${when}"`}>
-              <span class="departure-line" style="color:${style.bg}">${style.svg} ${escapeHTML(style.formattedLabel)}</span>
+              <span class="departure-line" style="--line-color:${style.bg}; color:var(--line-color)">${style.svg} ${escapeHTML(style.formattedLabel)}</span>
               <span class="departure-main">
                 <span class="departure-direction">${escapeHTML(dep.direction)}</span>
                 <span class="departure-meta">
@@ -1170,7 +1286,7 @@
                 </span>
               </span>
               <span class="departure-count" ${cancelled ? 'hidden' : ''}>
-                <span data-countdown>—</span><small data-map-label>ხაზის ნახვა</small>
+                <span data-countdown>—</span><small>ხაზის ნახვა</small>
               </span>
             </button>
             ${renderAlerts(dep.alerts)}
@@ -1285,17 +1401,21 @@
       if (element.textContent !== text) element.textContent = text;
     }
 
-    async function openVehicleInSidebar(encodedTripId) {
+    async function openVehicleInSidebar(encodedTripId, fromBoard = false) {
+      trackedFromBoard = fromBoard;
+      trackingReturnTab = activeSidebarTab;
+      setJourneyVisible(false);
+      document.getElementById('trackedStopSummary').classList.toggle('hidden', !fromBoard);
       trackedTripId = decodeURIComponent(encodedTripId);
       trackedLeg = null;
       trackedRoute = null;
       trackedLine = null;
       routeOverlayLayerGroup.clearLayers();
       const departure = currentDepartures.find(dep => dep.tripId === trackedTripId);
-      trackedTargetId = departure?.stopId || selectedStop?.id;
+      trackedTargetId = fromBoard ? (departure?.stopId || selectedStop?.id) : null;
       trackedTargetTime = Date.parse(departure?.arrival ?? departure?.when);
       document.getElementById('sidebarTabsBar').classList.add('hidden');
-      ['Departures', 'Favorites'].forEach(t => document.getElementById('tabContent' + t).classList.add('hidden'));
+      ['Departures', 'Journey', 'Favorites'].forEach(t => document.getElementById('tabContent' + t).classList.add('hidden'));
       document.getElementById('tabContentVehicleDetails').classList.remove('hidden');
       setTrackingText('trackLineBadge', '—');
       setTrackingText('trackDirectionTitle', 'იტვირთება მარშრუტი…');
@@ -1329,8 +1449,12 @@
       badge.innerHTML = style.svg + escapeHTML(style.formattedLabel);
       badge.style.backgroundColor = style.bg;
       setTrackingText('trackDirectionTitle', 'მიმართულება: ' + (leg.headsign || leg.to?.name || '—'));
+      if (!trackedFromBoard && trackedLine) {
+        routeOverlayLayerGroup.removeLayer(trackedLine);
+        trackedLine = null;
+      }
       trackedRoute = LiveTransit.routeProgress(leg, trackedTargetId, trackedTargetTime);
-      if (trackedRoute.target < 0 && selectedStop?.id !== trackedTargetId) {
+      if (trackedFromBoard && trackedRoute.target < 0 && selectedStop?.id !== trackedTargetId) {
         trackedRoute = LiveTransit.routeProgress(leg, selectedStop?.id, trackedTargetTime);
       }
       const { stops, target } = trackedRoute;
@@ -1340,7 +1464,7 @@
         const value = leg.cancelled || stop.cancelled ? 'გამოტოვებულია' : Number.isFinite(time) ? displayTime.format(time) : '—';
         return `<div data-route-stop="${index}" class="tracking-stop ${index === target ? 'target' : ''} rounded-lg bg-slate-950/70 px-3 py-2">
           <div class="flex items-center justify-between gap-2">
-            <span class="tracking-dot" aria-hidden="true">●</span>
+            <span class="tracking-dot" aria-hidden="true"></span>
             <span class="flex-1">${escapeHTML(stop.name)}</span>
             <time class="font-mono shrink-0">${value}</time>
           </div>${renderAlerts(stop.alerts)}
@@ -1354,7 +1478,7 @@
       const { stops, target } = trackedRoute;
       const targetStop = stops[target];
       const cancelled = trackedLeg.cancelled || targetStop?.cancelled ||
-        currentDepartures.some(dep => dep.tripId === trackedTripId && (dep.cancelled || (dep.skipped && dep.stopId === trackedTargetId)));
+        (trackedFromBoard && currentDepartures.some(dep => dep.tripId === trackedTripId && (dep.cancelled || (dep.skipped && dep.stopId === trackedTargetId))));
       const boardDeparture = currentDepartures.find(dep => dep.tripId === trackedTripId && dep.stopId === trackedTargetId);
       const arrival = LiveTransit.hasLiveTime(targetStop?.arrivalTimestampReason)
         ? Date.parse(targetStop.arrival) : Date.parse(boardDeparture?.arrival ?? boardDeparture?.when);
@@ -1374,21 +1498,27 @@
       const currentName = position?.from?.name ?? (trackedLeg.realTime ? stops[current]?.name : null);
       setTrackingText('trackCurrentSegment', cancelled ? 'გაუქმებულია' :
         currentName ? (position?.stopped || !position?.to?.name ? currentName : currentName + ' → ' + position.to.name) : '—');
-      setTrackingText('trackArrival', cancelled ? '—' : formatCountdown(arrival, now));
+      paintCountdown(document.getElementById('trackArrival'), arrival, now, cancelled ? '—' : null);
       const remaining = current >= 0 && target >= current
         ? stops.slice(current + 1, target + 1).filter(stop => !stop.cancelled).length : null;
       setTrackingText('trackRemaining', cancelled || remaining === null ? '—' : String(remaining));
       document.querySelectorAll('[data-route-stop]').forEach(row => {
-        row.classList.toggle('current', !cancelled && Number(row.dataset.routeStop) === current);
+        const index = Number(row.dataset.routeStop);
+        row.classList.toggle('current', !cancelled && index === current);
+        row.classList.toggle('passed', !cancelled && index < current);
+        if (!cancelled && index === current) row.setAttribute('aria-current', 'step');
+        else row.removeAttribute('aria-current');
       });
-      const path = cancelled ? [] : LiveTransit.remainingRoute(trackedRoute, position, current);
+      const path = cancelled ? [] : trackedFromBoard
+        ? LiveTransit.remainingRoute(trackedRoute, position, current) : trackedRoute.points;
       if (path.length > 1) {
-        if (trackedLine) trackedLine.setLatLngs(path);
-        else trackedLine = L.polyline(path, { color: '#38bdf8', weight: 6, opacity: 0.9 }).addTo(routeOverlayLayerGroup);
+        if (trackedLine && trackedFromBoard) trackedLine.setLatLngs(path);
+        else if (!trackedLine) trackedLine = L.polyline(path, { color: '#38bdf8', weight: 6, opacity: 0.9 }).addTo(routeOverlayLayerGroup);
       } else if (trackedLine) {
         routeOverlayLayerGroup.removeLayer(trackedLine);
         trackedLine = null;
       }
+      if (!trackedFromBoard) return;
       const meters = path.slice(1).reduce((total, point, index) => total + haversineMeters(...path[index], ...point), 0);
       const distance = !cancelled && position?.stopped && current === target && target >= 0 ? '0 მ' : path.length > 1 ? (meters >= 1000 ? `${(meters / 1000).toFixed(1)} კმ` : `${Math.round(meters)} მ`) : '—';
       setTrackingText('trackDistance', distance);
@@ -1406,17 +1536,19 @@
       routeOverlayLayerGroup.clearLayers();
       document.getElementById('tabContentVehicleDetails').classList.add('hidden');
       document.getElementById('sidebarTabsBar').classList.remove('hidden');
-      if (restoreTab) switchSidebarTab('departures');
+      if (restoreTab) switchSidebarTab(trackingReturnTab);
     }
 
     /*************************************************************************
      * 10. SIDEBAR TABS & RADAR
      *************************************************************************/
     function switchSidebarTab(tab) {
+      activeSidebarTab = tab;
+      setJourneyVisible(tab === 'journey');
       document.getElementById('tabContentVehicleDetails').classList.add('hidden');
       document.getElementById('sidebarTabsBar').classList.remove('hidden');
 
-      ['Departures', 'Favorites'].forEach(t => {
+      ['Departures', 'Journey', 'Favorites'].forEach(t => {
         const el = document.getElementById('tabContent' + t);
         const btn = document.getElementById('tab' + t + 'Btn');
         if (t.toLowerCase() === tab) {
@@ -1558,6 +1690,10 @@
     function setSettingsOpen(open) {
       document.getElementById('settingsModal').classList.toggle('hidden', !open);
       document.getElementById('mapRefreshControl').classList.toggle('hidden', open);
+      pendingStartupStop = null;
+      document.getElementById('settingsStartupStopInput').value = '';
+      document.getElementById('settingsStartupDropdown').classList.add('hidden');
+      document.getElementById('confirmStartupStop').disabled = true;
     }
     function openSettingsModal() { setSettingsOpen(true); }
     function closeSettingsModal() { setSettingsOpen(false); }
@@ -1573,68 +1709,75 @@
     }
     function enableAllTransportTypes() { enabledTransportTypes = new Set(['tram', 'bus', 'suburban', 'regional']); updateTransportTypeSettingsUI(); renderDeparturesList(); updateLiveMarkers(); }
     function updateTransportTypeSettingsUI() {
-      ['tram', 'bus', 'suburban', 'regional'].forEach(k => {
-        const btn = document.getElementById(`typeToggle-${k}`);
-        const state = document.getElementById(`typeState-${k}`);
-        if (btn && state) {
-          document.getElementById(`typeIcon-${k}`).innerHTML = TRANSPORT_SVGS[k];
-          const active = enabledTransportTypes.has(k);
-          btn.setAttribute('aria-pressed', String(active));
-          state.textContent = active ? 'Aktiv' : 'Inaktiv';
-          state.className = active ? 'text-[11px] text-emerald-400 font-semibold' : 'text-[11px] text-slate-500 font-semibold';
+      for (const key of ['tram', 'bus', 'suburban', 'regional']) {
+        document.getElementById(`typeIcon-${key}`).innerHTML = TRANSPORT_SVGS[key];
+        document.getElementById(`typeToggle-${key}`).setAttribute('aria-pressed', String(enabledTransportTypes.has(key)));
+      }
+    }
+
+    let pendingStartupStop = null;
+    function setupSettingsStartupStopSearch() {
+      setupStopPicker('settingsStartupStopInput', 'settingsStartupDropdown', stop => {
+        pendingStartupStop = stop;
+        document.getElementById('confirmStartupStop').disabled = !stop;
+      });
+    }
+
+    function confirmStartupStop() {
+      if (!pendingStartupStop) return;
+      localStorage.setItem('de_transit_custom_start_stop', JSON.stringify(pendingStartupStop));
+      updateStartupStopSettingsUI();
+      showToast(`საწყისად დაყენდა: ${pendingStartupStop.name}`);
+      document.getElementById('confirmStartupStop').disabled = true;
+    }
+
+    function setupStopPicker(inputId, dropdownId, onChange) {
+      const input = document.getElementById(inputId);
+      const dropdown = document.getElementById(dropdownId);
+      let timer;
+      let request = 0;
+      input.addEventListener('input', () => {
+        clearTimeout(timer);
+        const serial = ++request;
+        const query = input.value.trim();
+        onChange(null);
+        dropdown.classList.add('hidden');
+        if (query.length < 2) return;
+        timer = setTimeout(async () => {
+          const results = await safeFetchJSON(`${TRANSITOUS_BASE}/api/v1/geocode?text=${encodeURIComponent(query)}&type=STOP`);
+          if (serial !== request || input.value.trim() !== query) return;
+          dropdown.replaceChildren();
+          for (const place of Array.isArray(results) ? results.slice(0, 6) : []) {
+            if (!place.id) continue;
+            const option = document.createElement('button');
+            option.type = 'button';
+            option.className = 'stop-picker-option';
+            option.innerHTML = `<span>${escapeHTML(place.name)}</span><small>${escapeHTML(stopCity(place))}</small>`;
+            option.addEventListener('click', () => {
+              request++;
+              input.value = place.name;
+              dropdown.classList.add('hidden');
+              onChange({ id: place.id, name: place.name, location: { latitude: place.lat, longitude: place.lon } });
+            });
+            dropdown.append(option);
+          }
+          if (!dropdown.children.length) dropdown.textContent = 'გაჩერება ვერ მოიძებნა.';
+          dropdown.classList.remove('hidden');
+        }, 250);
+      });
+      input.addEventListener('keydown', event => {
+        if (event.key === 'Escape') dropdown.classList.add('hidden');
+        if (event.key === 'ArrowDown' && !dropdown.classList.contains('hidden')) {
+          event.preventDefault();
+          dropdown.querySelector('button')?.focus();
         }
       });
     }
 
-    function setupSettingsStartupStopSearch() {
-      const input = document.getElementById('settingsStartupStopInput');
-      const dropdown = document.getElementById('settingsStartupDropdown');
-      if (!input || !dropdown) return;
-
-      let timer = null;
-      input.addEventListener('input', () => {
-        const q = input.value.trim();
-        clearTimeout(timer);
-        if (q.length < 2) { dropdown.classList.add('hidden'); return; }
-        timer = setTimeout(async () => {
-          dropdown.classList.remove('hidden');
-          const res = await safeFetchJSON(`${TRANSITOUS_BASE}/api/v1/geocode?text=${encodeURIComponent(q)}&type=STOP`);
-          if (!Array.isArray(res) || res.length === 0) { dropdown.innerHTML = `<div class="p-3 text-xs text-slate-400">ვერ მოიძებნა</div>`; return; }
-          dropdown.innerHTML = res.slice(0, 6).map(st => {
-            const obj = { id: st.id || st.stopId, name: st.name, location: { latitude: st.lat || st.latitude, longitude: st.lon || st.longitude } };
-            return `<div onclick="setCustomStartupStop('${tripClick(JSON.stringify(obj))}')" class="px-3.5 py-2.5 hover:bg-slate-800 cursor-pointer text-xs font-bold text-white">${escapeHTML(obj.name)} <span class="float-right ml-2 text-slate-400">${escapeHTML(stopCity(st))}</span></div>`;
-          }).join('');
-        }, 250);
-      });
-    }
-
-    async function saveTypedStartupStopFromSettings() {
-      const input = document.getElementById('settingsStartupStopInput');
-      const query = input.value.trim();
-      if (query.length < 2) return;
-      const results = await safeFetchJSON(`${TRANSITOUS_BASE}/api/v1/geocode?text=${encodeURIComponent(query)}&type=STOP`);
-      if (input.value.trim() !== query) return;
-      const stop = results?.find?.(item => item.name?.toLowerCase() === query.toLowerCase());
-      if (!stop) {
-        showToast('აირჩიე გაჩერება ძიების სიიდან.');
-        return;
-      }
-      setCustomStartupStop(tripClick(JSON.stringify({
-        id: stop.id, name: stop.name, location: { latitude: stop.lat, longitude: stop.lon }
-      })));
-    }
-
-    function setCustomStartupStop(encoded) {
-      const stop = JSON.parse(decodeURIComponent(encoded));
-      localStorage.setItem('de_transit_custom_start_stop', JSON.stringify(stop));
-      document.getElementById('settingsStartupStopInput').value = stop.name;
-      document.getElementById('settingsStartupDropdown').classList.add('hidden');
-      updateStartupStopSettingsUI();
-      showToast(`საწყისად დაყენდა: ${stop.name}`);
-    }
-
     function resetToAutoGpsStartup() {
       localStorage.removeItem('de_transit_custom_start_stop');
+      pendingStartupStop = null;
+      document.getElementById('confirmStartupStop').disabled = true;
       document.getElementById('settingsStartupStopInput').value = '';
       updateStartupStopSettingsUI();
       locateUserDevice(true, false);
@@ -1678,5 +1821,6 @@
       toastTimer = setTimeout(() => box.classList.add('hidden'), 3500);
     }
   </script>
+  <script src="journey.js?v=1"></script>
 </body>
 </html>

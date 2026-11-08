@@ -44,7 +44,8 @@
           !Number.isFinite(departure) || !Number.isFinite(arrival) ||
           departure > now + 120_000 || arrival < now - 180_000 || departure > arrival) continue;
 
-      const leg = { departure, arrival, from: segment.from, to: segment.to };
+      const points = decodePolyline(segment.polyline);
+      const leg = { departure, arrival, points, distances: pathDistances(points), from: segment.from, to: segment.to };
       for (const trip of segment.trips ?? []) {
         if (!trip.tripId || trip.cancelled) continue;
         if (!trips.has(trip.tripId)) {
@@ -60,6 +61,39 @@
     }
     for (const trip of trips.values()) trip.legs.sort((a, b) => a.departure - b.departure);
     return trips;
+  }
+
+  function estimatedPosition(trip, now = Date.now()) {
+    const next = trip.legs.findIndex(leg => leg.departure > now);
+    const index = next < 0 ? trip.legs.length - 1 : next - 1;
+    const previous = trip.legs[index];
+    const upcoming = trip.legs[next];
+    if (!previous) return null;
+    if (now >= previous.arrival) {
+      const sameStop = upcoming && (previous.to?.stopId
+        ? previous.to.stopId === upcoming.from?.stopId
+        : previous.to?.name && previous.to.name === upcoming.from?.name);
+      if (sameStop && !previous.to?.cancelled && !upcoming.from?.cancelled &&
+          Number.isFinite(previous.to?.lat) && Number.isFinite(previous.to?.lon)) {
+        return { lat: previous.to.lat, lng: previous.to.lon, from: previous.to, to: upcoming.to, stopped: true };
+      }
+      return null;
+    }
+    const leg = previous;
+    const { departure, arrival, points, distances } = leg;
+    const length = distances.at(-1);
+    if (!(length > 0) || arrival <= departure) return null;
+    const target = (now - departure) / (arrival - departure) * length;
+    const end = distances.findIndex(distance => distance > target);
+    if (end < 1) return null;
+    const fraction = (target - distances[end - 1]) / (distances[end] - distances[end - 1]);
+    const [fromLat, fromLng] = points[end - 1];
+    const [toLat, toLng] = points[end];
+    return {
+      lat: fromLat + fraction * (toLat - fromLat),
+      lng: fromLng + fraction * (toLng - fromLng),
+      from: leg.from, to: leg.to
+    };
   }
 
   function platformLabel(...places) {
@@ -196,6 +230,37 @@
     return ['OBSERVED', 'PREDICTED', 'PROPAGATED'].includes(reason);
   }
 
+  function positionOnRoute(route, now) {
+    const { stops, points, projected } = route;
+    let fromIndex = -1;
+    let start = NaN;
+    for (let index = 0; index < stops.length; index++) {
+      const stop = stops[index];
+      if (stop.cancelled) continue;
+      const arrival = Date.parse(stop.arrival);
+      const departure = Date.parse(stop.departure);
+      if (hasLiveTime(stop.arrivalTimestampReason) && hasLiveTime(stop.departureTimestampReason) &&
+          arrival <= now && now < departure) {
+        if (Number.isFinite(stop.lat) && Number.isFinite(stop.lon)) return {
+          lat: stop.lat, lng: stop.lon, from: stop,
+          to: stops.slice(index + 1).find(place => !place.cancelled), stopped: true
+        };
+      }
+      if (fromIndex >= 0 && points.length) {
+        const from = stops[fromIndex];
+        if (hasLiveTime(from.departureTimestampReason) && hasLiveTime(stop.arrivalTimestampReason) &&
+            start <= now && now < arrival) {
+          const section = points.slice(projected[fromIndex], projected[index] + 1);
+          const distances = pathDistances(section);
+          return estimatedPosition({ legs: [{ departure: start, arrival, from, to: stop, points: section, distances }] }, now);
+        }
+      }
+      fromIndex = index;
+      start = departure;
+    }
+    return null;
+  }
+
   function remainingRoute(route, position, currentStop, minimumProgress = 0) {
     const { points, projected, distances, target } = route;
     if (!points.length || target < 0) return null;
@@ -283,7 +348,7 @@
     return positions;
   }
 
-  const api = { berlinLocal, berlinInstant, nextBerlinDay, hasLiveTime, routeProgress, remainingRoute, throughService, mapTrips, platformLabel, departures, stopStatus, isPlannedDeparture, boardArrival, decodePolyline, vehiclePositions, MAX_POSITION_AGE_MS };
+  const api = { berlinLocal, berlinInstant, nextBerlinDay, hasLiveTime, positionOnRoute, routeProgress, remainingRoute, throughService, mapTrips, estimatedPosition, platformLabel, departures, stopStatus, isPlannedDeparture, boardArrival, decodePolyline, vehiclePositions, MAX_POSITION_AGE_MS };
   if (typeof module === 'object') module.exports = api;
   else root.LiveTransit = api;
 })(globalThis);

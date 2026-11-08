@@ -889,14 +889,14 @@
      * 3. SVG ICONS & FORMATTER
      *************************************************************************/
     const transportIcon = shapes => `<svg class="transport-side-icon w-5 h-3.5 shrink-0 inline-block" viewBox="0 0 36 22" aria-hidden="true"
-      fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${shapes}</svg>`;
+      fill="currentColor" fill-rule="evenodd">${shapes}</svg>`;
     const TRANSPORT_SVGS = {
-      tram: transportIcon('<path d="M3 17v-5l2-4h25l3 4v5zM14 8l5-4-3-2m-3 0h8M6 12h24M11 9v7m7-7v7m7-7v7M3 21h30"/><circle cx="9" cy="18.5" r="1.4"/><circle cx="27" cy="18.5" r="1.4"/>'),
-      bus: transportIcon('<path d="M6 17H3V7a3 3 0 013-3h23a3 3 0 013 2l1 5v6h-4m-5 0H11M4 11h29M10 5v6m6-6v6m6-6v11m5-11v6M30 14h3"/><circle cx="8.5" cy="17.5" r="2.5"/><circle cx="26.5" cy="17.5" r="2.5"/>'),
-      suburban: transportIcon('<path d="M3 17V8l3-3h23l4 4v8zM5 10h26M11 6v10m7-10v10m7-10v10M4 21h28"/><circle cx="9" cy="18.5" r="1.4"/><circle cx="27" cy="18.5" r="1.4"/>'),
-      regional: transportIcon('<path d="M3 17V6l2-2h22l6 7v6zM5 8h19m3 0 4 4M8 8v4m6-4v4m6-4v4M5 21h27"/><circle cx="9" cy="18.5" r="1.4"/><circle cx="26" cy="18.5" r="1.4"/>'),
-      express: transportIcon('<path d="M3 16V7h20c4 0 8 4 11 8l-1 2H4zM6 10h17l5 3M12 10v3m6-3v3M5 21h28"/><circle cx="9" cy="18.5" r="1.4"/><circle cx="25" cy="18.5" r="1.4"/>'),
-      ferry: transportIcon('<path d="M3 14h30l-4 5H8zM9 14V8h17l4 6M15 8V4h7v4M13 10v2m5-2v2m5-2v2M3 21h30"/>')
+      tram: transportIcon('<path d="M2 17l1-7q.4-2 3-2h24q2.6 0 3 2l1 7v1H2zm3-6-.5 4H7v-4zm4 0v4h4v-4zm6 0v5h2v-5zm4 0v5h2v-5zm4 0v4h4v-4zm6 0v4h2.5l-.5-4z"/><path d="M21 8l5-4-5-2" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/><path d="M1 20h34v1H1z"/><circle cx="9" cy="18" r="1.6"/><circle cx="27" cy="18" r="1.6"/>'),
+      bus: transportIcon('<path d="M2 6q0-2 2-2h26q2.5 0 3 3l1 6v4h-4a4 4 0 0 0-8 0H14a4 4 0 0 0-8 0H2zm3 1v5h5V7zm7 0v5h5V7zm7 0v5h5V7zm7 0v7h3V7zm4 0v5h2l-.7-5z"/><circle cx="10" cy="17.5" r="2.75"/><circle cx="26" cy="17.5" r="2.75"/>'),
+      suburban: transportIcon('<path d="M2 16v-5l3-4h25l4 4v5q0 2-2 2H4q-2 0-2-2zm4-6-1.5 3H9v-3zm5 0v5h3v-5zm5 0v3h4v-3zm6 0v5h3v-5zm5 0v3h4l-1.5-3z"/><path d="M3 20h30v1H3z"/><circle cx="9" cy="18" r="1.6"/><circle cx="27" cy="18" r="1.6"/>'),
+      regional: transportIcon('<path d="M2 16V7q0-2 2-2h22q3 0 5 3l3 5v3q0 2-2 2H4q-2 0-2-2zm3-8v4h4V8zm6 0v4h4V8zm6 0v4h4V8zm6 0v6h3V8zm5 0v4h3l-2-3z"/><path d="M3 20h30v1H3z"/><circle cx="9" cy="18" r="1.6"/><circle cx="26" cy="18" r="1.6"/>'),
+      express: transportIcon('<path d="M3 13c4-5 10-7 16-7h13q2 0 2 2v7q0 3-3 3H8c-4 0-7-1-7-2 0-1 1-2 2-3zm4 0h8l3-4c-4 0-8 1.5-11 4zm13-4v3h3V9zm5 0v3h3V9zm5 0v3h2V9zM6 15v1h25v-1z"/><path d="M22 2h11v1.4H22zM26 4h9v1.2h-9zM3 20h31v1H3z"/><circle cx="11" cy="18" r="1.6"/><circle cx="27" cy="18" r="1.6"/>'),
+      ferry: transportIcon('<path d="M2 14h32l-4 5H8zm6-1V8h6V4h8v4h5l4 5zm3-3v2h4v-2zm6 0v2h4v-2zm6 0v2h4l-1-2zM3 20h30v1H3z"/>')
     };
 
     function getLineStyle(lineName, product) {
@@ -948,6 +948,8 @@
     let trackedTripId = null;
     let viewportRequest = 0;
     let departuresRequest = 0;
+    const BOARD_PAGE_SIZE = 20;
+    let boardPaging = null;
     let tripRequest = 0;
     let departuresStatus = '';
     let departuresNote = '';
@@ -1452,7 +1454,8 @@
       const stop = selectedStop;
       if (!stop) return;
       const request = ++departuresRequest;
-      if (!silent) {
+      if (boardPaging?.stop !== stop) {
+        boardPaging = { stop, limit: BOARD_PAGE_SIZE, head: [], tail: new Map(), cursors: new Set() };
         currentDepartures = [];
         stopAlerts = [];
         departuresStatus = 'იტვირთება';
@@ -1460,42 +1463,42 @@
         document.getElementById('lastUpdatedTime').textContent = '';
         renderDeparturesList();
       }
+      const paging = boardPaging;
       const now = Date.now();
       try {
-        const { day, next, midnight } = LiveTransit.nextBerlinDay(now);
         const scope = stop.platformOnly ? '&radius=0&exactRadius=true' : '';
-        const fetchBoard = (time, { extra = '', version = 'v5', nearby = false } = {}) => {
+        const fetchBoard = (time, { extra = '', version = 'v5', nearby = false } = {}, cursor) => {
           const area = nearby && stop.location ? `&center=${stopLatLng(stop).join(',')}&radius=35` : scope;
+          const page = cursor ? `&pageCursor=${encodeURIComponent(cursor)}` : '';
           return safeFetchJSON(
-            `${TRANSITOUS_BASE}/api/${version}/stoptimes?stopId=${encodeURIComponent(stop.id)}&time=${encodeURIComponent(new Date(time).toISOString())}${area}${extra}`, 6500);
+            `${TRANSITOUS_BASE}/api/${version}/stoptimes?stopId=${encodeURIComponent(stop.id)}&time=${encodeURIComponent(new Date(time).toISOString())}${area}${extra}${page}`, 6500);
         };
         const queryTime = now - 60_000;
-        let data = await fetchBoard(queryTime, { extra: '&n=40&window=3600' });
+        let source = { extra: '&n=40' };
+        let data = await fetchBoard(queryTime, source);
         if (request !== departuresRequest) return;
         let board = boardEvents(data, stop);
         if (!board?.length) {
-          const alternative = await fetchBoard(queryTime, { extra: '&n=40', version: 'v6', nearby: stop.platformOnly });
+          const fallbackSource = { extra: '&n=40', version: 'v6', nearby: stop.platformOnly };
+          const alternative = await fetchBoard(queryTime, fallbackSource);
           if (request !== departuresRequest) return;
           const matches = boardEvents(alternative, stop);
           if (matches?.length || board === null && matches) {
             data = alternative;
             board = matches;
+            source = fallbackSource;
           }
         }
-        const eventTime = dep => Date.parse(dep.when ?? dep.scheduledWhen);
-        const eventDay = dep => Number.isFinite(eventTime(dep)) ? LiveTransit.berlinLocal(eventTime(dep)).slice(0, 10) : '';
-        const current = dep => {
-          const time = eventTime(dep);
-          const position = vehiclePosition(dep.tripId, now);
-          return (eventDay(dep) === day && !boardEventExpired(dep, time, now)) ||
-            Boolean(LiveTransit.stopStatus(dep, position, now));
-        };
-        const hasCurrent = LiveTransit.departures(board ?? [], true).some(current);
+        const today = LiveTransit.berlinLocal(now).slice(0, 10);
+        const hasCurrent = LiveTransit.departures(board ?? [], true).some(dep =>
+          Number.isFinite(boardTime(dep)) && isUpcomingBoardDeparture(dep, now) &&
+          LiveTransit.berlinLocal(boardTime(dep)).slice(0, 10) === today);
         const visible = now - tripsFetchedAt <= LiveTransit.MAX_POSITION_AGE_MS
           ? boardEventsFromSegments(activeTripsCache, stop, now) : [];
+        const arrivalSource = { extra: '&n=30&arriveBy=true&direction=LATER', version: 'v6' };
         const [fallback, arrivalsData] = hasCurrent ? [visible, null] : await Promise.all([
           visible.length ? visible : boardFromNearbyTrips(stop, now),
-          fetchBoard(queryTime, { extra: '&n=30&arriveBy=true&direction=LATER', version: 'v6' })
+          fetchBoard(queryTime, arrivalSource)
         ]);
         if (request !== departuresRequest) return;
         const arrivals = boardEvents(arrivalsData, stop);
@@ -1507,18 +1510,23 @@
             represented.add(event.tripId);
           }
         }
-        const allEntries = LiveTransit.departures(events, true).sort((a, b) => eventTime(a) - eventTime(b));
-        let entries = allEntries.filter(current);
-        let note = entries.some(dep => fallback.some(event => event.tripId === dep.tripId) &&
+        const entries = LiveTransit.departures(events, true).filter(dep => isUpcomingBoardDeparture(dep, now));
+        const note = entries.some(dep => fallback.some(event => event.tripId === dep.tripId) &&
           !(board ?? []).some(event => event.tripId === dep.tripId)) ? 'რეისის მარშრუტიდან მიღებული მონაცემები' : '';
-        if (!entries.length) {
-          const future = allEntries.filter(dep => eventTime(dep) >= midnight && !dep.cancelled && !dep.skipped);
-          const firstDay = future.length ? eventDay(future[0]) : '';
-          entries = future.filter(dep => eventDay(dep) === firstDay);
-          if (entries.length) note = `${firstDay === next ? 'მომდევნო დღე' : 'უახლოესი თარიღი'} · ${boardDate.format(eventTime(entries[0]))}`;
+        const loaded = board !== null || arrivals !== null || entries.length > 0;
+        if (!loaded && silent && currentDepartures.length) return;
+        const headHorizon = Math.max(...LiveTransit.departures(board ?? [], true).map(boardTime).filter(Number.isFinite));
+        for (const [key, dep] of paging.tail) {
+          if (!paging.arrivalOnly && boardTime(dep) < headHorizon) paging.tail.delete(key);
         }
-        const loaded = (board !== null && (hasCurrent || arrivals !== null)) || entries.length > 0;
-        currentDepartures = entries;
+        paging.head = entries;
+        if (!paging.cursors.size && !paging.loading) {
+          const arrivalOnly = !data?.stopTimes?.length && Boolean(arrivalsData?.stopTimes?.length);
+          paging.cursor = (arrivalOnly ? arrivalsData : data)?.nextPageCursor ?? '';
+          paging.arrivalOnly = arrivalOnly;
+          paging.fetch = cursor => fetchBoard(queryTime, arrivalOnly ? arrivalSource : source, cursor);
+        }
+        mergeBoardPages(paging, now);
         stopAlerts = data?.place?.alerts ?? [];
         if (stop.platformOnly) showSelectedPlatform(LiveTransit.platformLabel(
           ...(board ?? []).map(event => event.place), data?.place, arrivalsData?.place) ||
@@ -1530,12 +1538,77 @@
       } catch (error) {
         if (request !== departuresRequest) return;
         console.error('Departure board failed', error);
-        currentDepartures = [];
+        if (silent && currentDepartures.length) return;
         stopAlerts = [];
         departuresStatus = 'მონაცემები მიუწვდომელია';
         departuresNote = '';
         document.getElementById('lastUpdatedTime').textContent = '';
         renderDeparturesList();
+      }
+    }
+
+    function boardTime(dep) {
+      return Date.parse(dep.when ?? dep.scheduledWhen);
+    }
+
+    function isUpcomingBoardDeparture(dep, now) {
+      return !boardEventExpired(dep, boardTime(dep), now) ||
+        Boolean(LiveTransit.stopStatus(dep, vehiclePosition(dep.tripId, now), now));
+    }
+
+    function boardDepartureKey(dep) {
+      return JSON.stringify([dep.tripId, dep.stopId, dep.scheduledWhen ?? dep.when]);
+    }
+
+    function mergeBoardPages(paging, now = Date.now()) {
+      for (const [key, dep] of paging.tail) {
+        if (!isUpcomingBoardDeparture(dep, now)) paging.tail.delete(key);
+      }
+      const entries = new Map(paging.tail);
+      for (const dep of paging.head) entries.set(boardDepartureKey(dep), dep);
+      currentDepartures = [...entries.values()].filter(dep => isUpcomingBoardDeparture(dep, now))
+        .sort((a, b) => boardTime(a) - boardTime(b));
+    }
+
+    function visibleBoardDepartures(now = Date.now()) {
+      return currentDepartures.filter(dep => isUpcomingBoardDeparture(dep, now) &&
+        enabledTransportTypes.has(getLineStyle(dep.line.name, dep.line.product).category));
+    }
+
+    async function loadMoreBoardDepartures() {
+      const paging = boardPaging;
+      if (!paging || paging.loading) return;
+      const target = paging.limit + BOARD_PAGE_SIZE;
+      const startingHead = paging.head;
+      paging.loading = true;
+      paging.error = false;
+      renderDeparturesList();
+      try {
+        // Bound each click's work when filters exclude most of a stop's departures.
+        for (let attempts = 0; paging.cursor && visibleBoardDepartures().length < target && attempts < 8; attempts++) {
+          const cursor = paging.cursor;
+          const data = await paging.fetch(cursor);
+          if (boardPaging !== paging) return;
+          const events = boardEvents(data, paging.stop);
+          if (!events) throw new Error('Departure page unavailable');
+          if (!paging.cursors.size) {
+            for (const dep of startingHead) paging.tail.set(boardDepartureKey(dep), dep);
+          }
+          paging.cursors.add(cursor);
+          const next = data.nextPageCursor;
+          paging.cursor = data.stopTimes.length && next && !paging.cursors.has(next) ? next : '';
+          const rows = paging.arrivalOnly ? events.map(event => ({ ...event, arrivalOnly: true })) : events;
+          for (const dep of LiveTransit.departures(rows, true)) paging.tail.set(boardDepartureKey(dep), dep);
+          mergeBoardPages(paging);
+        }
+      } catch {
+        paging.error = true;
+      } finally {
+        if (boardPaging === paging) {
+          paging.limit = Math.max(paging.limit, Math.min(target, visibleBoardDepartures().length));
+          paging.loading = false;
+          renderDeparturesList();
+        }
       }
     }
 
@@ -1592,9 +1665,11 @@
     function renderDeparturesList() {
       const listEl = document.getElementById('departuresList');
       if (!selectedStop) return;
-      const filtered = currentDepartures.filter(dep => enabledTransportTypes.has(getLineStyle(dep.line.name, dep.line.product).category));
-      document.getElementById('departuresCountBadge').textContent = filtered.length;
-      const rows = filtered.map(dep => {
+      const filtered = visibleBoardDepartures();
+      const limit = boardPaging?.limit ?? BOARD_PAGE_SIZE;
+      const displayed = filtered.slice(0, limit);
+      document.getElementById('departuresCountBadge').textContent = displayed.length;
+      const rows = displayed.map(dep => {
         const style = getLineStyle(dep.line.name, dep.line.product);
         const delay = Math.round(dep.delay / 60);
         const cancelled = dep.cancelled || dep.skipped;
@@ -1625,7 +1700,12 @@
             ${renderAlerts(dep.alerts)}
           </div>`;
       }).join('') || `<div class="py-10 text-center text-xs text-slate-400">${departuresStatus}</div>`;
-      listEl.innerHTML = renderAlerts(stopAlerts) + (departuresNote ? `<p class="px-2 py-1 text-xs font-semibold text-slate-300">${departuresNote}</p>` : '') + rows;
+      const more = filtered.length > limit || boardPaging?.cursor
+        ? `<div class="py-3 text-center">
+          ${boardPaging?.error ? '<p class="mb-2 text-xs text-slate-400" role="status">მომდევნო რეისები ვერ ჩაიტვირთა</p>' : ''}
+          <button type="button" onclick="loadMoreBoardDepartures()" ${boardPaging?.loading ? 'disabled aria-busy="true"' : ''}
+            class="px-4 py-2 text-sm font-bold text-blue-400 hover:underline disabled:opacity-60">${boardPaging?.loading ? 'იტვირთება' : 'მეტის ჩვენება'}</button></div>` : '';
+      listEl.innerHTML = renderAlerts(stopAlerts) + (departuresNote ? `<p class="px-2 py-1 text-xs font-semibold text-slate-300">${departuresNote}</p>` : '') + rows + more;
       updateDepartureCountdowns();
     }
 

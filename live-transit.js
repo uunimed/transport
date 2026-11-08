@@ -1,5 +1,6 @@
 (function (root) {
   const MAX_POSITION_AGE_MS = 90_000;
+  const FALLBACK_DWELL_MS = 12_000;
   const berlinClock = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
@@ -63,8 +64,19 @@
     return trips;
   }
 
+  function dwellEnd(arrival, departure, nextArrival, observedDeparture) {
+    if (observedDeparture || departure !== arrival || !(nextArrival > departure)) return departure;
+    return departure + Math.min(FALLBACK_DWELL_MS, (nextArrival - departure) / 4);
+  }
+
+  function mapLegStart(leg, incoming) {
+    if (!leg.from?.stopId || leg.from.stopId !== incoming?.to?.stopId ||
+        leg.from.cancelled || incoming.to.cancelled) return leg.departure;
+    return dwellEnd(incoming.arrival, leg.departure, leg.arrival, leg.from.departureTimestampReason === 'OBSERVED');
+  }
+
   function estimatedPosition(trip, now = Date.now()) {
-    const next = trip.legs.findIndex(leg => leg.departure > now);
+    const next = trip.legs.findIndex((leg, index) => mapLegStart(leg, trip.legs[index - 1]) > now);
     const index = next < 0 ? trip.legs.length - 1 : next - 1;
     const previous = trip.legs[index];
     const upcoming = trip.legs[next];
@@ -73,14 +85,18 @@
       const sameStop = upcoming && (previous.to?.stopId
         ? previous.to.stopId === upcoming.from?.stopId
         : previous.to?.name && previous.to.name === upcoming.from?.name);
-      if (sameStop && !previous.to?.cancelled && !upcoming.from?.cancelled &&
+      const knownDeparture = Date.parse(previous.to?.departure);
+      const holdUntil = Number.isFinite(knownDeparture) ? knownDeparture : previous.arrival + FALLBACK_DWELL_MS;
+      const noOutgoingHold = !upcoming && now < holdUntil;
+      if ((sameStop || noOutgoingHold) && !previous.to?.cancelled && !upcoming?.from?.cancelled &&
           Number.isFinite(previous.to?.lat) && Number.isFinite(previous.to?.lon)) {
-        return { lat: previous.to.lat, lng: previous.to.lon, from: previous.to, to: upcoming.to, stopped: true };
+        return { lat: previous.to.lat, lng: previous.to.lon, from: previous.to, to: upcoming?.to, stopped: true };
       }
       return null;
     }
     const leg = previous;
-    const { departure, arrival, points, distances } = leg;
+    const { arrival, points, distances } = leg;
+    const departure = mapLegStart(leg, trip.legs[index - 1]);
     const length = distances.at(-1);
     if (!(length > 0) || arrival <= departure) return null;
     const target = (now - departure) / (arrival - departure) * length;
@@ -238,12 +254,16 @@
       const stop = stops[index];
       if (stop.cancelled) continue;
       const arrival = Date.parse(stop.arrival);
-      const departure = Date.parse(stop.departure);
-      if (hasLiveTime(stop.arrivalTimestampReason) && hasLiveTime(stop.departureTimestampReason) &&
+      const next = stops.slice(index + 1).find(place => !place.cancelled);
+      const rawDeparture = Date.parse(stop.departure);
+      const terminalHold = !next && !Number.isFinite(rawDeparture);
+      const departure = terminalHold ? arrival + FALLBACK_DWELL_MS
+        : dwellEnd(arrival, rawDeparture, Date.parse(next?.arrival), stop.departureTimestampReason === 'OBSERVED');
+      if (hasLiveTime(stop.arrivalTimestampReason) && (terminalHold || hasLiveTime(stop.departureTimestampReason)) &&
           arrival <= now && now < departure) {
         if (Number.isFinite(stop.lat) && Number.isFinite(stop.lon)) return {
           lat: stop.lat, lng: stop.lon, from: stop,
-          to: stops.slice(index + 1).find(place => !place.cancelled), stopped: true
+          to: next, stopped: true
         };
       }
       if (fromIndex >= 0 && points.length) {

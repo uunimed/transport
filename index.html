@@ -829,7 +829,7 @@
 
   </div>
 
-  <script src="live-transit.js?v=9"></script>
+  <script src="live-transit.js?v=10"></script>
   <script>
     /*************************************************************************
      * 1. SUPABASE CLIENT
@@ -1487,9 +1487,9 @@
         const eventDay = dep => Number.isFinite(eventTime(dep)) ? LiveTransit.berlinLocal(eventTime(dep)).slice(0, 10) : '';
         const current = dep => {
           const time = eventTime(dep);
-          const position = markerPositions.get(dep.tripId);
+          const position = vehiclePosition(dep.tripId, activeTripsCache.get(dep.tripId), now);
           return (eventDay(dep) === day && !boardEventExpired(dep, time, now)) ||
-            LiveTransit.confirmedAtStop(dep, position, now) || LiveTransit.departureAtStop(dep, position, now);
+            Boolean(LiveTransit.stopStatus(dep, position, now));
         };
         const hasCurrent = LiveTransit.departures(board ?? [], true).some(current);
         const visible = now - tripsFetchedAt <= LiveTransit.MAX_POSITION_AGE_MS
@@ -1553,6 +1553,12 @@
       return time < now - REFRESH_MS;
     }
 
+    const stopStatusLabels = {
+      confirmed: 'გაჩერებაზეა',
+      arrived: 'მოვიდა',
+      estimated: 'სავარაუდოდ გაჩერებაზეა'
+    };
+
     function paintCountdown(element, time, now, label = null) {
       const text = label ?? formatCountdown(time, now);
       const urgent = label === null && time > now && Math.ceil((time - now) / 1000) < 60;
@@ -1571,16 +1577,15 @@
         const trip = now - tripsFetchedAt <= LiveTransit.MAX_POSITION_AGE_MS ? activeTripsCache.get(dep.tripId) : null;
         const position = markerPositions.get(dep.tripId) ?? vehiclePosition(dep.tripId, trip, now);
         const planned = LiveTransit.isPlannedDeparture(dep, now, today);
-        const confirmed = !planned && LiveTransit.confirmedAtStop(dep, position, now);
-        const atStop = confirmed || !planned && LiveTransit.departureAtStop(dep, position, now);
+        const stopStatus = planned ? null : LiveTransit.stopStatus(dep, position, now);
         const departure = Date.parse(dep.when ?? dep.scheduledWhen);
         const plannedChip = row.querySelector('[data-board-planned]');
         plannedChip.classList.toggle('hidden', !planned);
         row.querySelector('[data-board-status]')?.classList.toggle('hidden', planned);
-        row.hidden = !atStop && boardEventExpired(dep, departure, now);
+        row.hidden = !stopStatus && boardEventExpired(dep, departure, now);
         row.parentElement.hidden = row.hidden;
         const eta = LiveTransit.boardArrival(dep, trip, position, now);
-        const label = planned ? boardDate.format(departure) : confirmed ? 'გაჩერებაზეა' : null;
+        const label = planned ? boardDate.format(departure) : stopStatusLabels[stopStatus] ?? null;
         paintCountdown(row.querySelector('[data-countdown]'), eta, now, label);
       });
       const cards = document.querySelectorAll('#departuresList .departure-card');
@@ -1904,18 +1909,20 @@
       const useBoardDeparture = boardDeparture?.departureObserved && targetStop?.departureTimestampReason !== 'OBSERVED';
       const targetEvent = targetStop && {
         ...boardDeparture, stopId: targetStop.stopId,
+        cancelled: Boolean(cancelled),
         arrival: useBoardArrival ? boardDeparture.arrival : targetStop.arrival ?? boardDeparture?.arrival,
         when: useBoardDeparture ? boardDeparture.when : targetStop.departure ?? boardDeparture?.when,
+        departure: useBoardDeparture ? boardDeparture.departure : targetStop.departure ?? boardDeparture?.departure,
         arrivalLive: LiveTransit.hasLiveTime(targetStop.arrivalTimestampReason) || boardDeparture?.arrivalLive,
         arrivalObserved: targetStop.arrivalTimestampReason === 'OBSERVED' || boardDeparture?.arrivalObserved,
         departureObserved: targetStop.departureTimestampReason === 'OBSERVED' || boardDeparture?.departureObserved
       };
-      const stoppedAtTarget = targetEvent && LiveTransit.confirmedAtStop(targetEvent, position, now);
+      const stopStatus = targetEvent && LiveTransit.stopStatus(targetEvent, position, now);
       const eta = useBoardArrival || LiveTransit.hasLiveTime(targetStop?.arrivalTimestampReason)
         ? Date.parse(targetEvent?.arrival) : boardDeparture ? LiveTransit.boardArrival(boardDeparture, trip, position, now) : NaN;
       const planned = boardDeparture && LiveTransit.isPlannedDeparture(boardDeparture, now);
       paintCountdown(document.getElementById('trackArrival'), eta, now,
-        cancelled ? waitingText : stoppedAtTarget ? 'გაჩერებაზეა' : planned ? boardDate.format(Date.parse(boardDeparture.when)) : null);
+        cancelled ? waitingText : planned ? boardDate.format(Date.parse(boardDeparture.when)) : stopStatusLabels[stopStatus] ?? null);
       const remaining = current >= 0 && target >= 0
         ? stops.slice(current + 1, target).filter(stop => !stop.cancelled).length : null;
       setTrackingText('trackRemaining', cancelled || remaining === null ? waitingText : String(remaining));

@@ -1,5 +1,6 @@
 (function (root) {
   const MAX_POSITION_AGE_MS = 90_000;
+  const MAP_TRIP_WINDOW_MS = 5 * 60_000;
   const FALLBACK_DWELL_MS = 12_000;
   const berlinClock = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit',
@@ -43,7 +44,7 @@
       const arrival = Date.parse(segment.arrival);
       if (segment.realTime !== true || segment.cancelled ||
           !Number.isFinite(departure) || !Number.isFinite(arrival) ||
-          departure > now + 120_000 || arrival < now - 180_000 || departure > arrival) continue;
+          departure > now + MAP_TRIP_WINDOW_MS || arrival < now - MAP_TRIP_WINDOW_MS || departure > arrival) continue;
 
       const points = decodePolyline(segment.polyline);
       const leg = { departure, arrival, points, distances: pathDistances(points), from: segment.from, to: segment.to };
@@ -54,6 +55,7 @@
             tripId: trip.tripId,
             line: { name: trip.displayName || segment.mode, product: segment.mode },
             direction: segment.to?.name || '',
+            fetchedAt: now,
             legs: []
           });
         }
@@ -62,6 +64,23 @@
     }
     for (const trip of trips.values()) trip.legs.sort((a, b) => a.departure - b.departure);
     return trips;
+  }
+
+  function mergeMapTrips(previous, segments, now = Date.now()) {
+    const fresh = mapTrips(segments, now);
+    const cancelled = new Set();
+    for (const segment of segments) {
+      for (const trip of segment.trips ?? []) {
+        if (trip.cancelled) cancelled.add(trip.tripId);
+      }
+    }
+    for (const id of cancelled) fresh.delete(id);
+    for (const [id, trip] of previous) {
+      if (!fresh.has(id) && !cancelled.has(id) && now - trip.fetchedAt <= MAX_POSITION_AGE_MS) {
+        fresh.set(id, trip);
+      }
+    }
+    return fresh;
   }
 
   function dwellEnd(arrival, departure, nextArrival, observedDeparture) {
@@ -90,7 +109,8 @@
       const noOutgoingHold = !upcoming && now < holdUntil;
       if ((sameStop || noOutgoingHold) && !previous.to?.cancelled && !upcoming?.from?.cancelled &&
           Number.isFinite(previous.to?.lat) && Number.isFinite(previous.to?.lon)) {
-        return { lat: previous.to.lat, lng: previous.to.lon, from: previous.to, to: upcoming?.to, stopped: true };
+        return { lat: previous.to.lat, lng: previous.to.lon, from: previous.to, to: upcoming?.to, stopped: true,
+          stoppedSince: previous.arrival, stoppedUntil: sameStop ? mapLegStart(upcoming, previous) : holdUntil };
       }
       return null;
     }
@@ -263,7 +283,7 @@
           arrival <= now && now < departure) {
         if (Number.isFinite(stop.lat) && Number.isFinite(stop.lon)) return {
           lat: stop.lat, lng: stop.lon, from: stop,
-          to: next, stopped: true
+          to: next, stopped: true, stoppedSince: arrival, stoppedUntil: departure
         };
       }
       if (fromIndex >= 0 && points.length) {
@@ -368,7 +388,7 @@
     return positions;
   }
 
-  const api = { berlinLocal, berlinInstant, nextBerlinDay, hasLiveTime, positionOnRoute, routeProgress, remainingRoute, throughService, mapTrips, estimatedPosition, platformLabel, departures, stopStatus, isPlannedDeparture, boardArrival, decodePolyline, vehiclePositions, MAX_POSITION_AGE_MS };
+  const api = { berlinLocal, berlinInstant, nextBerlinDay, hasLiveTime, positionOnRoute, routeProgress, remainingRoute, throughService, mapTrips, mergeMapTrips, estimatedPosition, platformLabel, departures, stopStatus, isPlannedDeparture, boardArrival, decodePolyline, vehiclePositions, MAX_POSITION_AGE_MS, MAP_TRIP_WINDOW_MS };
   if (typeof module === 'object') module.exports = api;
   else root.LiveTransit = api;
 })(globalThis);

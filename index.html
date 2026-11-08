@@ -829,7 +829,7 @@
 
   </div>
 
-  <script src="live-transit.js?v=8"></script>
+  <script src="live-transit.js?v=9"></script>
   <script>
     /*************************************************************************
      * 1. SUPABASE CLIENT
@@ -1218,7 +1218,7 @@
 
       if (Array.isArray(stops)) {
         viewportStops = stops.filter(st => st.stopId && Number.isFinite(st.lat) && Number.isFinite(st.lon)).map(st => ({
-          id: st.stopId, name: st.name, platform: st.track || st.stopCode,
+          id: st.stopId, name: st.name, platform: st.track || st.scheduledTrack, platformLabel: LiveTransit.platformLabel(st),
           location: { latitude: st.lat, longitude: st.lon }
         }));
         renderMapStops();
@@ -1277,7 +1277,7 @@
           ${isSelected ? '<div class="stop-pulse-ring"></div>' : ''}H</div>`,
         iconSize: [size, size], iconAnchor: [size / 2, size / 2]
       });
-      const label = stop.platform ? `${stop.name} · ბაქანი ${stop.platform}` : stop.name;
+      const label = stop.platformLabel ? `${stop.name} · ბაქანი ${stop.platformLabel}` : stop.name;
       const marker = L.marker(stopLatLng(stop), { icon, title: label, zIndexOffset: isSelected ? 200 : 0 });
       marker.bindTooltip(escapeHTML(label), { direction: 'top', offset: [0, -10], className: 'custom-tooltip' });
       marker.on('click', () => selectStop({ ...stop, platformOnly: true }, true));
@@ -1307,7 +1307,7 @@
         for (const stop of stops) {
           const button = document.createElement('button');
           button.type = 'button';
-          button.textContent = stop.platform ? `${stop.name} · ბაქანი ${stop.platform}` : stop.name;
+          button.textContent = stop.platformLabel ? `${stop.name} · ბაქანი ${stop.platformLabel}` : stop.name;
           button.addEventListener('click', () => {
             map.closePopup();
             selectStop({ ...stop, platformOnly: true }, true);
@@ -1339,7 +1339,7 @@
       document.getElementById('boardHeader').classList.remove('hidden');
       document.getElementById('departuresList').classList.remove('hidden');
       document.getElementById('selectedStopTitle').textContent = stop.name;
-      showSelectedPlatform(stop.platformOnly ? stop.platform : null);
+      showSelectedPlatform(stop.platformOnly ? stop.platformLabel ?? LiveTransit.platformLabel({ track: stop.platform }) : null);
       updateFavoriteButtonUI();
 
       await refreshSelectedStopDepartures(false);
@@ -1353,7 +1353,8 @@
 
     function boardEvents(data, stop) {
       if (!Array.isArray(data?.stopTimes)) return null;
-      return data.stopTimes.filter(event => event && (!stop.platformOnly || belongsToBoard(event.place, stop)));
+      return data.stopTimes.filter(event => event?.place &&
+        (!stop.platformOnly || belongsToBoard(event.place, stop)));
     }
 
     const fallbackTripCache = new Map();
@@ -1383,13 +1384,15 @@
         const leg = outgoing ?? incoming;
         if (!leg) continue;
         const place = outgoing ? outgoing.from : incoming.to;
-        const arrival = incoming?.arrival ?? outgoing.departure;
-        const departure = outgoing?.departure ?? arrival;
+        const arrival = incoming?.arrival;
+        const departure = outgoing?.departure;
         events.push({
           tripId, displayName: trip.line.name, mode: trip.line.product, headsign: trip.direction,
           realTime: true, arrivalOnly: !outgoing,
-          place: { ...place, arrival: new Date(arrival).toISOString(), departure: new Date(departure).toISOString(),
-            arrivalTimestampReason: 'PREDICTED', departureTimestampReason: 'PREDICTED' }
+          place: { ...place, arrival: incoming ? new Date(arrival).toISOString() : undefined,
+            departure: outgoing ? new Date(departure).toISOString() : undefined,
+            arrivalTimestampReason: incoming ? 'PREDICTED' : undefined,
+            departureTimestampReason: outgoing ? 'PREDICTED' : undefined }
         });
       }
       return events;
@@ -1446,13 +1449,6 @@
       return [...events.values()].sort((a, b) => Date.parse(a.place.departure) - Date.parse(b.place.departure));
     }
 
-    function upcomingBoardDepartures(events, now, scheduled = false) {
-      return LiveTransit.departures(events, scheduled).filter(dep => {
-        const time = Date.parse(dep.when ?? dep.scheduledWhen);
-        return Number.isFinite(time) ? time >= now - (scheduled ? 0 : 25_000) : !scheduled;
-      });
-    }
-
     async function refreshSelectedStopDepartures(silent = false) {
       const stop = selectedStop;
       if (!stop) return;
@@ -1469,52 +1465,68 @@
       try {
         const { day, next, midnight } = LiveTransit.nextBerlinDay(now);
         const scope = stop.platformOnly ? '&radius=0&exactRadius=true' : '';
-        const fetchBoard = (time, extra = '', version = 'v5') => safeFetchJSON(
-          `${TRANSITOUS_BASE}/api/${version}/stoptimes?stopId=${encodeURIComponent(stop.id)}&time=${encodeURIComponent(new Date(time).toISOString())}${scope}${extra}`, 6500);
-        let data = await fetchBoard(now - 60_000, '&n=40&window=3600');
+        const fetchBoard = (time, { extra = '', version = 'v5', nearby = false } = {}) => {
+          const area = nearby && stop.location ? `&center=${stopLatLng(stop).join(',')}&radius=35` : scope;
+          return safeFetchJSON(
+            `${TRANSITOUS_BASE}/api/${version}/stoptimes?stopId=${encodeURIComponent(stop.id)}&time=${encodeURIComponent(new Date(time).toISOString())}${area}${extra}`, 6500);
+        };
+        const queryTime = now - 60_000;
+        let data = await fetchBoard(queryTime, { extra: '&n=40&window=3600' });
         if (request !== departuresRequest) return;
-        if (!Array.isArray(data?.stopTimes)) data = await fetchBoard(now - 60_000, '&n=30', 'v6');
-        if (request !== departuresRequest) return;
-        const board = boardEvents(data, stop);
-        const visible = now - tripsFetchedAt <= LiveTransit.MAX_POSITION_AGE_MS
-          ? boardEventsFromSegments(activeTripsCache, stop, now) : [];
-        const fallback = !board?.length ? await boardFromNearbyTrips(stop, now) : visible;
-        if (request !== departuresRequest) return;
-        const boardTripIds = new Set((board ?? []).map(event => event.tripId));
-        const added = fallback.filter(event => !boardTripIds.has(event.tripId));
-        const events = board || added.length ? [...(board ?? []), ...added] : null;
-        let entries = [];
-        let note = added.length ? 'რეისის მარშრუტიდან მიღებული მონაცემები' : '';
-        if (events) {
-          const onDay = (dep, date) => {
-            const time = Date.parse(dep.when ?? dep.scheduledWhen);
-            return Number.isFinite(time) && LiveTransit.berlinLocal(time).startsWith(date);
-          };
-          entries = LiveTransit.departures(events, true).filter(dep => {
-            const time = Date.parse(dep.when ?? dep.scheduledWhen);
-            if (!onDay(dep, day) && !(time < now && LiveTransit.departureAtStop(dep, markerPositions.get(dep.tripId), now))) return false;
-            return dep.scheduledOnly ? time >= now : time >= now - 8000 ||
-              LiveTransit.departureAtStop(dep, markerPositions.get(dep.tripId), now);
-          });
-          if (!entries.length) {
-            let tomorrow = upcomingBoardDepartures(events, midnight, true).filter(dep => onDay(dep, next) && !dep.cancelled && !dep.skipped);
-            if (!tomorrow.length) {
-              const tomorrowData = await fetchBoard(midnight, '&n=30');
-              if (request !== departuresRequest) return;
-              tomorrow = upcomingBoardDepartures(boardEvents(tomorrowData, stop) ?? [], midnight, true)
-                .filter(dep => onDay(dep, next) && !dep.cancelled && !dep.skipped);
-              if (!tomorrow.length && !Array.isArray(tomorrowData?.stopTimes)) note = 'მომდევნო დღის მონაცემები მიუწვდომელია';
-            }
-            entries = tomorrow;
-            if (tomorrow.length) note = `მომდევნო დღე · ${boardDate.format(midnight)}`;
+        let board = boardEvents(data, stop);
+        if (!board?.length) {
+          const alternative = await fetchBoard(queryTime, { extra: '&n=40', version: 'v6', nearby: stop.platformOnly });
+          if (request !== departuresRequest) return;
+          const matches = boardEvents(alternative, stop);
+          if (matches?.length || board === null && matches) {
+            data = alternative;
+            board = matches;
           }
         }
-        currentDepartures = entries.sort((a, b) => Date.parse(a.when ?? a.scheduledWhen) - Date.parse(b.when ?? b.scheduledWhen));
+        const eventTime = dep => Date.parse(dep.when ?? dep.scheduledWhen);
+        const eventDay = dep => Number.isFinite(eventTime(dep)) ? LiveTransit.berlinLocal(eventTime(dep)).slice(0, 10) : '';
+        const current = dep => {
+          const time = eventTime(dep);
+          const position = markerPositions.get(dep.tripId);
+          return (eventDay(dep) === day && !boardEventExpired(dep, time, now)) ||
+            LiveTransit.confirmedAtStop(dep, position, now) || LiveTransit.departureAtStop(dep, position, now);
+        };
+        const hasCurrent = LiveTransit.departures(board ?? [], true).some(current);
+        const visible = now - tripsFetchedAt <= LiveTransit.MAX_POSITION_AGE_MS
+          ? boardEventsFromSegments(activeTripsCache, stop, now) : [];
+        const [fallback, arrivalsData] = hasCurrent ? [visible, null] : await Promise.all([
+          visible.length ? visible : boardFromNearbyTrips(stop, now),
+          fetchBoard(queryTime, { extra: '&n=30&arriveBy=true&direction=LATER', version: 'v6' })
+        ]);
+        if (request !== departuresRequest) return;
+        const arrivals = boardEvents(arrivalsData, stop);
+        const events = [...(board ?? [])];
+        const represented = new Set(events.map(event => event.tripId));
+        for (const event of [...(arrivals ?? []).map(item => ({ ...item, arrivalOnly: true })), ...fallback]) {
+          if (!represented.has(event.tripId)) {
+            events.push(event);
+            represented.add(event.tripId);
+          }
+        }
+        const allEntries = LiveTransit.departures(events, true).sort((a, b) => eventTime(a) - eventTime(b));
+        let entries = allEntries.filter(current);
+        let note = entries.some(dep => fallback.some(event => event.tripId === dep.tripId) &&
+          !(board ?? []).some(event => event.tripId === dep.tripId)) ? 'რეისის მარშრუტიდან მიღებული მონაცემები' : '';
+        if (!entries.length) {
+          const future = allEntries.filter(dep => eventTime(dep) >= midnight && !dep.cancelled && !dep.skipped);
+          const firstDay = future.length ? eventDay(future[0]) : '';
+          entries = future.filter(dep => eventDay(dep) === firstDay);
+          if (entries.length) note = `${firstDay === next ? 'მომდევნო დღე' : 'უახლოესი თარიღი'} · ${boardDate.format(eventTime(entries[0]))}`;
+        }
+        const loaded = (board !== null && (hasCurrent || arrivals !== null)) || entries.length > 0;
+        currentDepartures = entries;
         stopAlerts = data?.place?.alerts ?? [];
-        if (stop.platformOnly) showSelectedPlatform(data?.place?.track || stop.platform);
-        departuresStatus = events ? 'ინფორმაცია ვერ მოიძებნა' : 'მონაცემები მიუწვდომელია';
+        if (stop.platformOnly) showSelectedPlatform(LiveTransit.platformLabel(
+          ...(board ?? []).map(event => event.place), data?.place, arrivalsData?.place) ||
+          stop.platformLabel || LiveTransit.platformLabel({ track: stop.platform }));
+        departuresStatus = loaded ? 'მომდევნო რეისი ვერ მოიძებნა' : 'მონაცემები მიუწვდომელია';
         departuresNote = note;
-        document.getElementById('lastUpdatedTime').textContent = events ? `განახლდა ${displayTime.format(new Date())}` : '';
+        document.getElementById('lastUpdatedTime').textContent = loaded ? `განახლდა ${displayTime.format(new Date())}` : '';
         renderDeparturesList();
       } catch (error) {
         if (request !== departuresRequest) return;
@@ -1534,6 +1546,13 @@
       return `${Math.floor(seconds / 60)} წთ ${String(seconds % 60).padStart(2, '0')} წმ`;
     }
 
+    function boardEventExpired(dep, time, now) {
+      if (!Number.isFinite(time)) return true;
+      if (dep.scheduledOnly || dep.departureObserved) return time < now;
+      // A prediction can expire between two polls. Keep the row visible until the next update.
+      return time < now - REFRESH_MS;
+    }
+
     function paintCountdown(element, time, now, label = null) {
       const text = label ?? formatCountdown(time, now);
       const urgent = label === null && time > now && Math.ceil((time - now) / 1000) < 60;
@@ -1550,17 +1569,19 @@
         const dep = currentDepartures[Number(row.dataset.boardTrip)];
         if (!dep) return;
         const trip = now - tripsFetchedAt <= LiveTransit.MAX_POSITION_AGE_MS ? activeTripsCache.get(dep.tripId) : null;
-        const position = markerPositions.get(dep.tripId) ?? (trip ? LiveTransit.estimatedPosition(trip, now) : null);
+        const position = markerPositions.get(dep.tripId) ?? vehiclePosition(dep.tripId, trip, now);
         const planned = LiveTransit.isPlannedDeparture(dep, now, today);
-        const atStop = !planned && LiveTransit.departureAtStop(dep, position, now);
+        const confirmed = !planned && LiveTransit.confirmedAtStop(dep, position, now);
+        const atStop = confirmed || !planned && LiveTransit.departureAtStop(dep, position, now);
         const departure = Date.parse(dep.when ?? dep.scheduledWhen);
         const plannedChip = row.querySelector('[data-board-planned]');
         plannedChip.classList.toggle('hidden', !planned);
         row.querySelector('[data-board-status]')?.classList.toggle('hidden', planned);
-        row.hidden = !atStop && departure < now - 8000;
+        row.hidden = !atStop && boardEventExpired(dep, departure, now);
         row.parentElement.hidden = row.hidden;
-        const label = atStop ? 'გაჩერებაზეა' : planned ? boardDate.format(departure) : null;
-        paintCountdown(row.querySelector('[data-countdown]'), LiveTransit.boardArrival(dep, trip, position, now), now, label);
+        const eta = LiveTransit.boardArrival(dep, trip, position, now);
+        const label = planned ? boardDate.format(departure) : arrivalLabel(confirmed, eta, now);
+        paintCountdown(row.querySelector('[data-countdown]'), eta, now, label);
       });
       const cards = document.querySelectorAll('#departuresList .departure-card');
       if (cards.length) document.getElementById('departuresCountBadge').textContent = [...cards].filter(card => !card.hidden).length;
@@ -1596,7 +1617,7 @@
                 </span>
               </span>
               <span class="departure-count" ${cancelled ? 'hidden' : ''}>
-                <span data-countdown>${waitingMarkup}</span><small>რუკაზე ნახვა</small>
+                <span data-countdown class="inline-block max-w-28 whitespace-normal">${waitingMarkup}</span><small>რუკაზე ნახვა</small>
               </span>
             </button>
             ${renderAlerts(dep.alerts)}
@@ -1661,7 +1682,9 @@
     }
 
     function updateFocusedVehicle(id, position, style) {
-      if (focusedVehicle && (!position || focusedVehicleId !== id || liveVehicleMarkers.has(id))) {
+      const measured = Boolean(position?.observedAt);
+      if (focusedVehicle && (!position || focusedVehicleId !== id || liveVehicleMarkers.has(id) ||
+          focusedVehicle.measured !== measured)) {
         vehiclesLayerGroup.removeLayer(focusedVehicle);
         focusedVehicle = null;
       }
@@ -1672,9 +1695,10 @@
       }
       const icon = L.divIcon({
         className: 'vehicle-marker-container', iconSize: [0, 0],
-        html: `<div class="vehicle-pill estimated" style="--vehicle-color:${style.bg}"><span>${style.svg}</span>${escapeHTML(style.formattedLabel)}</div>`
+        html: `<div class="vehicle-pill ${measured ? '' : 'estimated'}" style="--vehicle-color:${style.bg}"><span>${style.svg}</span>${escapeHTML(style.formattedLabel)}</div>`
       });
       focusedVehicle = L.marker([position.lat, position.lng], { icon, zIndexOffset: 900 }).addTo(vehiclesLayerGroup);
+      focusedVehicle.measured = measured;
       focusedVehicleId = id;
     }
 
@@ -1698,6 +1722,23 @@
       }
     }
 
+    function vehiclePosition(id, trip, now) {
+      const routeTripId = trackedLeg?.service.findLast(leg => Date.parse(leg.startTime) <= now)?.tripId ?? trackedTripId;
+      const tracked = trackedRoute && now - trackedFetchedAt <= LiveTransit.MAX_POSITION_AGE_MS &&
+        routeTripId === id;
+      const estimate = (tracked ? LiveTransit.positionOnRoute(trackedRoute, now) : null) ??
+        (trip && now - tripsFetchedAt <= LiveTransit.MAX_POSITION_AGE_MS ? LiveTransit.estimatedPosition(trip, now) : null);
+      const report = liveVehiclesState.get(id);
+      if (!report || now - report.observedAt > LiveTransit.MAX_POSITION_AGE_MS) return estimate;
+      return { from: estimate?.from, to: estimate?.to, ...report };
+    }
+
+    function arrivalLabel(confirmed, eta, now) {
+      if (confirmed) return 'გაჩერებაზეა';
+      if (Number.isFinite(eta) && eta <= now) return 'მოსვლა დაუდასტურებელია';
+      return null;
+    }
+
     function updateLiveMarkers() {
       const now = Date.now();
       const bounds = map.getBounds();
@@ -1708,10 +1749,8 @@
             (trackedTripId === id && trackedLeg?.cancelled)) continue;
         const style = getLineStyle(trip.line.name, trip.line.product);
         if (!enabledTransportTypes.has(style.category)) continue;
-        const estimate = LiveTransit.estimatedPosition(trip, now);
-        const report = liveVehiclesState.get(id);
-        const measured = Boolean(report && now - report.observedAt <= LiveTransit.MAX_POSITION_AGE_MS);
-        const position = measured ? { ...estimate, ...report } : estimate;
+        const position = vehiclePosition(id, trip, now);
+        const measured = Boolean(position?.observedAt);
         if (!position || !bounds.contains([position.lat, position.lng])) continue;
         markerPositions.set(id, position);
         const tooltip = vehicleTooltip(trip, style, position);
@@ -1789,6 +1828,7 @@
       const id = trackedTripId;
       const data = await safeFetchJSON(`${TRANSITOUS_BASE}/api/v5/trip?tripId=${encodeURIComponent(id)}&joinInterlinedLegs=false`);
       if (request !== tripRequest || id !== trackedTripId) return;
+      if (!data && trackedRoute && Date.now() - trackedFetchedAt <= LiveTransit.MAX_POSITION_AGE_MS) return;
 
       const leg = Array.isArray(data?.legs) ? LiveTransit.throughService(data.legs, id) : null;
       trackedLeg = leg ?? null;
@@ -1855,31 +1895,30 @@
       const boardDeparture = currentDepartures.find(dep => dep.tripId === trackedTripId && dep.stopId === trackedTargetId);
       const activeLeg = trackedLeg.service.findLast(segment => Date.parse(segment.startTime) <= now) ?? trackedLeg;
       const activeId = activeLeg.tripId;
-      const reported = liveVehiclesState.get(activeId);
       const trip = activeTripsCache.get(activeId);
-      const estimate = trip && now - tripsFetchedAt <= LiveTransit.MAX_POSITION_AGE_MS
-        ? LiveTransit.estimatedPosition(trip, now) : null;
-      const located = estimate ?? (now - trackedFetchedAt <= LiveTransit.MAX_POSITION_AGE_MS
-        ? LiveTransit.positionOnRoute(trackedRoute, now) : null);
-      const position = reported && now - reported.observedAt <= LiveTransit.MAX_POSITION_AGE_MS
-        ? { ...located, ...reported } : located;
-      const stopIndex = stops.findIndex(stop => position?.from?.stopId && stop.stopId === position.from.stopId);
+      const position = vehiclePosition(activeId, trip, now);
+      const positionStopId = position?.stopId ?? position?.from?.stopId;
+      const stopIndex = stops.findIndex(stop => positionStopId && stop.stopId === positionStopId);
       const lastStop = stops.findLastIndex(stop => !stop.cancelled &&
         LiveTransit.hasLiveTime(stop.arrivalTimestampReason ?? stop.departureTimestampReason) &&
         Date.parse(stop.arrival ?? stop.departure) <= now);
-      const current = Math.max(stopIndex, lastStop);
+      const current = stopIndex >= 0 ? stopIndex : lastStop;
       const currentName = position?.from?.name ?? (trackedLeg.realTime ? stops[current]?.name : null);
       setTrackingText('trackCurrentSegment', cancelled ? 'გაუქმებულია' :
         currentName ? (position?.stopped || !position?.to?.name ? currentName : currentName + ' → ' + position.to.name) : waitingText);
-      const stoppedAtTarget = targetStop && LiveTransit.departureAtStop(boardDeparture ?? {
-        stopId: targetStop.stopId, arrival: targetStop.arrival, when: targetStop.departure,
-        arrivalLive: LiveTransit.hasLiveTime(targetStop.arrivalTimestampReason)
-      }, position, now);
+      const targetEvent = targetStop && {
+        ...boardDeparture, stopId: targetStop.stopId,
+        arrival: targetStop.arrival ?? boardDeparture?.arrival, when: targetStop.departure ?? boardDeparture?.when,
+        arrivalLive: LiveTransit.hasLiveTime(targetStop.arrivalTimestampReason) || boardDeparture?.arrivalLive,
+        arrivalObserved: targetStop.arrivalTimestampReason === 'OBSERVED' || boardDeparture?.arrivalObserved,
+        departureObserved: targetStop.departureTimestampReason === 'OBSERVED' || boardDeparture?.departureObserved
+      };
+      const stoppedAtTarget = targetEvent && LiveTransit.confirmedAtStop(targetEvent, position, now);
       const eta = LiveTransit.hasLiveTime(targetStop?.arrivalTimestampReason)
         ? Date.parse(targetStop.arrival) : boardDeparture ? LiveTransit.boardArrival(boardDeparture, trip, position, now) : NaN;
       const planned = boardDeparture && LiveTransit.isPlannedDeparture(boardDeparture, now);
       paintCountdown(document.getElementById('trackArrival'), eta, now,
-        cancelled ? waitingText : stoppedAtTarget ? 'გაჩერებაზეა' : planned ? boardDate.format(Date.parse(boardDeparture.when)) : null);
+        cancelled ? waitingText : planned ? boardDate.format(Date.parse(boardDeparture.when)) : arrivalLabel(stoppedAtTarget, eta, now));
       const remaining = current >= 0 && target >= 0
         ? stops.slice(current + 1, target).filter(stop => !stop.cancelled).length : null;
       setTrackingText('trackRemaining', cancelled || remaining === null ? waitingText : String(remaining));

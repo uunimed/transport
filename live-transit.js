@@ -74,7 +74,7 @@
       const sameStop = upcoming && (previous.to?.stopId
         ? previous.to.stopId === upcoming.from?.stopId
         : previous.to?.name && previous.to.name === upcoming.from?.name);
-      if ((sameStop || now - previous.arrival <= 25_000) &&
+      if (sameStop &&
           Number.isFinite(previous.to?.lat) && Number.isFinite(previous.to?.lon)) {
         return { lat: previous.to.lat, lng: previous.to.lon, from: previous.to, to: upcoming?.to, stopped: true };
       }
@@ -83,15 +83,7 @@
     const leg = previous;
     if (!leg.points.length) return null;
     const { arrival, points, distances } = leg;
-    const incoming = trip.legs[index - 1];
-    const sameStop = leg.from?.stopId && incoming?.to?.stopId === leg.from.stopId;
-    const briefStop = sameStop && Math.abs(incoming.arrival - leg.departure) <= 5000;
-    const dwell = briefStop ? Math.min(8000, (arrival - leg.departure) / 4) : 0;
-    const departure = leg.departure + dwell;
-    if (now < departure) {
-      return { lat: leg.from.lat ?? points[0][0], lng: leg.from.lon ?? points[0][1],
-        from: leg.from, to: leg.to, stopped: true };
-    }
+    const departure = leg.departure;
     const progress = arrival > departure ? (now - departure) / (arrival - departure) : 0;
     const target = progress * distances.at(-1);
     if (!target) return { lat: points[0][0], lng: points[0][1], from: leg.from, to: leg.to };
@@ -107,34 +99,54 @@
     };
   }
 
+  function platformLabel(...places) {
+    const label = value => String(value ?? '').trim();
+    const internal = /^(?:[TB][NSEW]|TW|TO|BW|BO)$/i;
+    for (const place of places) {
+      if (!place) continue;
+      const track = label(place.track);
+      if (track && !internal.test(track)) return track.replace(/^(?:Bahnsteig|Steig|Gleis|Gl\.)\s+/i, '');
+      const description = label(place.description).match(/\b(?:Bahnsteig(?:\s+Gleis)?|Steig|Gleis|Gl\.)\s+(\d+[a-z]?)$/i);
+      if (description) return description[1];
+      const scheduled = label(place.scheduledTrack);
+      if (scheduled && !internal.test(scheduled)) return scheduled.replace(/^(?:Bahnsteig|Steig|Gleis|Gl\.)\s+/i, '');
+    }
+    return '';
+  }
+
   function departures(items, includeScheduled = false) {
     return items.flatMap(item => {
       const place = item.place ?? {};
       const cancelled = item.tripCancelled === true;
       const skipped = !cancelled && (item.cancelled === true || place.cancelled === true);
-      const hasLiveDeparture = item.realTime === true &&
-        !['NO_RT_DATA', 'INCONSISTENT_RT'].includes(place.departureTimestampReason);
+      const arrivalOnly = item.arrivalOnly === true;
+      const eventTime = arrivalOnly ? place.arrival : place.departure;
+      const scheduledTime = arrivalOnly ? place.scheduledArrival : place.scheduledDeparture;
+      const reason = arrivalOnly ? place.arrivalTimestampReason : place.departureTimestampReason;
+      const hasLiveDeparture = item.realTime === true && hasLiveTime(reason) && Number.isFinite(Date.parse(eventTime));
       const platformChanged = place.track && place.scheduledTrack && place.track !== place.scheduledTrack;
       const planned = includeScheduled && !cancelled && !skipped &&
-        Number.isFinite(Date.parse(place.scheduledDeparture ?? place.departure));
+        Number.isFinite(Date.parse(scheduledTime ?? eventTime));
       if (!item.tripId || !(cancelled || skipped || hasLiveDeparture || platformChanged || planned)) return [];
       const scheduledOnly = Boolean(planned && !hasLiveDeparture && !platformChanged);
-      const when = hasLiveDeparture ? place.departure : scheduledOnly ? (place.scheduledDeparture ?? place.departure) : null;
-      const delay = hasLiveDeparture ? (Date.parse(when) - Date.parse(place.scheduledDeparture)) / 1000 : NaN;
+      const when = hasLiveDeparture ? eventTime : scheduledTime ?? eventTime;
+      const delay = hasLiveDeparture ? (Date.parse(when) - Date.parse(scheduledTime)) / 1000 : NaN;
       return [{
         tripId: item.tripId,
         line: { name: item.displayName || item.routeShortName || item.mode, product: item.mode },
         direction: item.headsign || item.tripTo?.name || '',
         when,
-        scheduledWhen: place.scheduledDeparture,
+        scheduledWhen: scheduledTime,
         scheduledOnly,
-        arrivalOnly: item.arrivalOnly === true,
+        arrivalOnly,
         arrival: scheduledOnly ? (place.scheduledArrival ?? place.arrival) : place.arrival,
         firstStop: Boolean(place.stopId && item.tripFrom?.stopId === place.stopId),
         arrivalLive: !scheduledOnly && hasLiveTime(place.arrivalTimestampReason),
+        arrivalObserved: place.arrivalTimestampReason === 'OBSERVED',
+        departureObserved: place.departureTimestampReason === 'OBSERVED',
         stopId: place.stopId,
         delay,
-        platform: place.track,
+        platform: platformLabel(place),
         platformChanged,
         cancelled,
         skipped,
@@ -144,13 +156,22 @@
   }
 
   function departureAtStop(dep, position, now) {
-    if (dep.cancelled || dep.skipped) return false;
+    if (dep.cancelled || dep.skipped || dep.arrivalOnly) return false;
     const atPlatform = position?.from?.stopId === dep.stopId && Boolean(dep.stopId);
     const departure = Date.parse(dep.when);
     const arrival = Date.parse(dep.arrival);
-    if (position?.stopped && atPlatform && (!Number.isFinite(departure) || now <= departure + 25000)) return true;
-    if (dep.scheduledOnly || !dep.arrivalLive || !Number.isFinite(arrival) || !Number.isFinite(departure)) return false;
-    return arrival <= now && now <= Math.max(departure, arrival + 8000);
+    if (dep.departureObserved && departure <= now) return false;
+    if (position?.stopId === dep.stopId && position.observedAt && typeof position.stopped === 'boolean') return position.stopped;
+    return Boolean(atPlatform && position.stopped && (!Number.isFinite(departure) || now < departure) ||
+      !dep.scheduledOnly && dep.arrivalLive && arrival <= now && now < departure);
+  }
+
+  function confirmedAtStop(dep, position, now) {
+    if (dep.cancelled || dep.skipped || dep.arrivalOnly || dep.departureObserved && Date.parse(dep.when) <= now) return false;
+    if (position?.stopId === dep.stopId && position.observedAt && typeof position.stopped === 'boolean') return position.stopped;
+    const arrival = Date.parse(dep.arrival);
+    return Boolean(dep.arrivalObserved && arrival <= now && (departureAtStop(dep, position, now) ||
+      now - arrival <= MAX_POSITION_AGE_MS && (!position || position.stopped && position.from?.stopId === dep.stopId)));
   }
 
   function isPlannedDeparture(dep, now, today = berlinLocal(now).slice(0, 10)) {
@@ -164,7 +185,7 @@
     const arrival = Date.parse(dep.arrival ?? dep.when);
     if (position && !position.stopped) return !dep.scheduledOnly && Number.isFinite(arrival) && (arrival >= now || !approach)
       ? arrival : approach?.arrival ?? arrival;
-    if (dep.scheduledOnly || !position && dep.firstStop) return NaN;
+    if (dep.scheduledOnly || !position && dep.firstStop && !dep.arrivalLive) return NaN;
     if (position?.stopped) {
       const lastArrival = trip?.legs.findLast(leg => leg.to?.stopId === position.from?.stopId && leg.arrival <= now)?.arrival;
       const first = !lastArrival && trip?.legs[0]?.from?.stopId === position.from?.stopId;
@@ -228,12 +249,11 @@
   }
 
   function hasLiveTime(reason) {
-    return Boolean(reason && !['NO_RT_DATA', 'INCONSISTENT_RT'].includes(reason));
+    return ['OBSERVED', 'PREDICTED', 'PROPAGATED'].includes(reason);
   }
 
   function positionOnRoute(route, now) {
     const { stops, points, projected } = route;
-    if (!points.length) return null;
     let fromIndex = -1;
     for (let index = 0; index < stops.length; index++) {
       const stop = stops[index];
@@ -242,9 +262,12 @@
       const departure = Date.parse(stop.departure);
       if (hasLiveTime(stop.arrivalTimestampReason) && hasLiveTime(stop.departureTimestampReason) &&
           arrival <= now && now < departure) {
-        return { lat: stop.lat, lng: stop.lon, from: stop, to: stops.slice(index + 1).find(next => !next.cancelled), stopped: true };
+        if (Number.isFinite(stop.lat) && Number.isFinite(stop.lon)) return {
+          lat: stop.lat, lng: stop.lon, from: stop,
+          to: stops.slice(index + 1).find(next => !next.cancelled), stopped: true
+        };
       }
-      if (fromIndex >= 0) {
+      if (fromIndex >= 0 && points.length) {
         const from = stops[fromIndex];
         const start = Date.parse(from.departure);
         if (hasLiveTime(from.departureTimestampReason) && hasLiveTime(stop.arrivalTimestampReason) &&
@@ -338,13 +361,15 @@
           Math.abs(lat) > 90 || Math.abs(lon) > 180 ||
           !Number.isFinite(observedAt) || observedAt > now || now - observedAt > MAX_POSITION_AGE_MS) continue;
       if (observedAt > (positions.get(tripId)?.observedAt ?? 0)) {
-        positions.set(tripId, { lat, lng: lon, observedAt });
+        positions.set(tripId, { lat, lng: lon, observedAt,
+          ...(typeof item.stopped === 'boolean' && item.stopId
+            ? { stopped: item.stopped, stopId: item.stopId } : {}) });
       }
     }
     return positions;
   }
 
-  const api = { berlinLocal, berlinInstant, nextBerlinDay, hasLiveTime, positionOnRoute, routeProgress, remainingRoute, throughService, mapTrips, estimatedPosition, departures, departureAtStop, isPlannedDeparture, boardArrival, decodePolyline, vehiclePositions, MAX_POSITION_AGE_MS };
+  const api = { berlinLocal, berlinInstant, nextBerlinDay, hasLiveTime, positionOnRoute, routeProgress, remainingRoute, throughService, mapTrips, estimatedPosition, platformLabel, departures, departureAtStop, confirmedAtStop, isPlannedDeparture, boardArrival, decodePolyline, vehiclePositions, MAX_POSITION_AGE_MS };
   if (typeof module === 'object') module.exports = api;
   else root.LiveTransit = api;
 })(globalThis);

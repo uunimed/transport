@@ -1541,8 +1541,8 @@
     }
 
     function formatCountdown(time, now = Date.now()) {
-      if (!Number.isFinite(time)) return waitingText;
-      const seconds = Math.max(0, Math.ceil((time - now) / 1000));
+      if (!Number.isFinite(time) || time <= now) return waitingText;
+      const seconds = Math.ceil((time - now) / 1000);
       return `${Math.floor(seconds / 60)} წთ ${String(seconds % 60).padStart(2, '0')} წმ`;
     }
 
@@ -1580,7 +1580,7 @@
         row.hidden = !atStop && boardEventExpired(dep, departure, now);
         row.parentElement.hidden = row.hidden;
         const eta = LiveTransit.boardArrival(dep, trip, position, now);
-        const label = planned ? boardDate.format(departure) : arrivalLabel(confirmed, eta, now);
+        const label = planned ? boardDate.format(departure) : confirmed ? 'გაჩერებაზეა' : null;
         paintCountdown(row.querySelector('[data-countdown]'), eta, now, label);
       });
       const cards = document.querySelectorAll('#departuresList .departure-card');
@@ -1731,12 +1731,6 @@
       const report = liveVehiclesState.get(id);
       if (!report || now - report.observedAt > LiveTransit.MAX_POSITION_AGE_MS) return estimate;
       return { from: estimate?.from, to: estimate?.to, ...report };
-    }
-
-    function arrivalLabel(confirmed, eta, now) {
-      if (confirmed) return 'გაჩერებაზეა';
-      if (Number.isFinite(eta) && eta <= now) return 'მოსვლა დაუდასტურებელია';
-      return null;
     }
 
     function updateLiveMarkers() {
@@ -1906,19 +1900,22 @@
       const currentName = position?.from?.name ?? (trackedLeg.realTime ? stops[current]?.name : null);
       setTrackingText('trackCurrentSegment', cancelled ? 'გაუქმებულია' :
         currentName ? (position?.stopped || !position?.to?.name ? currentName : currentName + ' → ' + position.to.name) : waitingText);
+      const useBoardArrival = boardDeparture?.arrivalObserved && targetStop?.arrivalTimestampReason !== 'OBSERVED';
+      const useBoardDeparture = boardDeparture?.departureObserved && targetStop?.departureTimestampReason !== 'OBSERVED';
       const targetEvent = targetStop && {
         ...boardDeparture, stopId: targetStop.stopId,
-        arrival: targetStop.arrival ?? boardDeparture?.arrival, when: targetStop.departure ?? boardDeparture?.when,
+        arrival: useBoardArrival ? boardDeparture.arrival : targetStop.arrival ?? boardDeparture?.arrival,
+        when: useBoardDeparture ? boardDeparture.when : targetStop.departure ?? boardDeparture?.when,
         arrivalLive: LiveTransit.hasLiveTime(targetStop.arrivalTimestampReason) || boardDeparture?.arrivalLive,
         arrivalObserved: targetStop.arrivalTimestampReason === 'OBSERVED' || boardDeparture?.arrivalObserved,
         departureObserved: targetStop.departureTimestampReason === 'OBSERVED' || boardDeparture?.departureObserved
       };
       const stoppedAtTarget = targetEvent && LiveTransit.confirmedAtStop(targetEvent, position, now);
-      const eta = LiveTransit.hasLiveTime(targetStop?.arrivalTimestampReason)
-        ? Date.parse(targetStop.arrival) : boardDeparture ? LiveTransit.boardArrival(boardDeparture, trip, position, now) : NaN;
+      const eta = useBoardArrival || LiveTransit.hasLiveTime(targetStop?.arrivalTimestampReason)
+        ? Date.parse(targetEvent?.arrival) : boardDeparture ? LiveTransit.boardArrival(boardDeparture, trip, position, now) : NaN;
       const planned = boardDeparture && LiveTransit.isPlannedDeparture(boardDeparture, now);
       paintCountdown(document.getElementById('trackArrival'), eta, now,
-        cancelled ? waitingText : planned ? boardDate.format(Date.parse(boardDeparture.when)) : arrivalLabel(stoppedAtTarget, eta, now));
+        cancelled ? waitingText : stoppedAtTarget ? 'გაჩერებაზეა' : planned ? boardDate.format(Date.parse(boardDeparture.when)) : null);
       const remaining = current >= 0 && target >= 0
         ? stops.slice(current + 1, target).filter(stop => !stop.cancelled).length : null;
       setTrackingText('trackRemaining', cancelled || remaining === null ? waitingText : String(remaining));

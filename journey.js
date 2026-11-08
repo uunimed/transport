@@ -9,11 +9,21 @@ function initializeJourneyPlanner() {
   setupStopPicker('journeyTo', 'journeyToOptions', stop => changeJourneyEndpoint('to', stop));
   document.getElementById('journeyForm').addEventListener('submit', findJourneys);
   document.getElementById('journeyTimeMode').addEventListener('change', updateJourneyTimePicker);
-  for (const id of ['journeyHour', 'journeyMinute']) {
-    const input = document.getElementById(id);
-    input.addEventListener('input', () => { input.value = input.value.replace(/\D/g, '').slice(0, 2); });
-    input.addEventListener('blur', () => { if (input.value) input.value = input.value.padStart(2, '0'); });
-  }
+  const clock = document.getElementById('journeyClock');
+  clock.addEventListener('focus', () => clock.select());
+  clock.addEventListener('input', () => {
+    const caret = clock.selectionStart ?? clock.value.length;
+    const before = clock.value.slice(0, caret).replace(/\D/g, '').length;
+    const digits = clock.value.replace(/\D/g, '').slice(0, 4);
+    clock.value = digits.length >= 2 ? digits.slice(0, 2) + ':' + digits.slice(2) : digits;
+    const next = Math.min(clock.value.length, before + (before >= 2 ? 1 : 0));
+    clock.setSelectionRange(next, next);
+  });
+  clock.addEventListener('keydown', event => {
+    if (event.key === 'Backspace' && clock.selectionStart === 3 && clock.selectionEnd === 3 && clock.value[2] === ':') {
+      clock.setSelectionRange(2, 2);
+    }
+  });
   updateJourneyTimePicker();
   document.getElementById('journeyForm').querySelector('button[type=submit]').disabled = false;
   setInterval(() => {
@@ -77,24 +87,22 @@ function useJourneyOriginLocation() {
 
 function updateJourneyTimePicker() {
   const mode = document.getElementById('journeyTimeMode').value;
-  const fields = ['journeyDate', 'journeyHour', 'journeyMinute'].map(id => document.getElementById(id));
+  const fields = ['journeyDate', 'journeyClock'].map(id => document.getElementById(id));
   const show = mode !== 'now';
   document.getElementById('journeyTimePicker').classList.toggle('hidden', !show);
-  const [date, hour, minute] = LiveTransit.berlinLocal(Date.now()).split(/T|:/);
+  const values = LiveTransit.berlinLocal(Date.now()).split('T');
   fields.forEach((field, index) => {
     field.disabled = !show;
     field.required = show;
-    if (show && !field.value) field.value = [date, hour, minute][index];
+    if (show && !field.value) field.value = values[index];
   });
 }
 
 function selectedJourneyTime(mode) {
   if (mode === 'now') return Date.now();
   const date = document.getElementById('journeyDate').value;
-  const hour = document.getElementById('journeyHour').value;
-  const minute = document.getElementById('journeyMinute').value;
-  if (!date || !hour || !minute) return NaN;
-  return LiveTransit.berlinInstant(`${date}T${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`);
+  const clock = document.getElementById('journeyClock').value;
+  return LiveTransit.berlinInstant(date + 'T' + clock);
 }
 
 async function findJourneys(event) {
@@ -173,10 +181,21 @@ function mergeJourneyOptions(options) {
 const transferArrow = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h6a6 6 0 0 1 6 6v6m-4-4 4 4 4-4"/></svg>';
 const backArrow = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 12H4m7-7-7 7 7 7"/></svg>';
 
+function journeyTiming(option) {
+  const requested = Date.parse(journey.query?.get('time'));
+  const planned = Date.parse(option.startTime);
+  const start = journey.searchMode === 'arrive' || !Number.isFinite(requested) ? planned : requested;
+  const firstTransit = option.legs.findIndex(leg => leg.tripId);
+  const shift = Number.isFinite(planned) ? start - planned : 0;
+  const end = Date.parse(option.endTime) + (firstTransit < 0 ? shift : 0);
+  return { start, end, shift, firstTransit };
+}
+
 function renderJourneyOptions() {
   const results = document.getElementById('journeyResults');
   results.replaceChildren();
   journey.options.forEach((option, index) => {
+    const timing = journeyTiming(option);
     const card = document.createElement('button');
     card.type = 'button';
     card.className = 'journey-card';
@@ -184,8 +203,8 @@ function renderJourneyOptions() {
     const steps = lines.filter((line, index) => line !== lines[index - 1])
       .map(line => `<span>${escapeHTML(line)}</span>`).join(transferArrow);
     card.innerHTML = `<span class="flex justify-between gap-2 text-sm font-bold">
-      <span>${journeyTimeRange(option.startTime, option.endTime)}</span>
-      <span>${journeyMinutes(option.duration)}</span>
+      <span>${journeyTimeRange(timing.start, timing.end)}</span>
+      <span>${journeyMinutes((timing.end - timing.start) / 1000)}</span>
     </span>
     <span class="journey-result-legs text-xs">${steps}</span>
     <span class="journey-muted text-[11px]">${journeyTransfers(option.transfers)}${index === 0 ? ' · საუკეთესო' : ''}</span>`;
@@ -227,7 +246,7 @@ function journeyTimeRange(start, end) {
 }
 
 function journeyTime(value) {
-  const time = Date.parse(value);
+  const time = typeof value === 'number' ? value : Date.parse(value);
   return Number.isFinite(time) ? displayTime.format(time) : waitingMarkup;
 }
 
@@ -337,6 +356,7 @@ function renderSelectedJourney(fit = false) {
   const rows = [];
   let previousTransit = null;
   let walked = false;
+  const timing = journeyTiming(option);
   const legs = option.legs.map((leg, legIndex) => {
     const transit = Boolean(leg.tripId);
     const stops = journeyStops(leg);
@@ -352,6 +372,13 @@ function renderSelectedJourney(fit = false) {
     }
     let start = stops[0]?.departure ?? leg.startTime;
     let end = stops.at(-1)?.arrival ?? leg.endTime;
+    if (!transit && (timing.firstTransit < 0 || legIndex < timing.firstTransit) && timing.shift) {
+      const startMs = Date.parse(start), endMs = Date.parse(end);
+      if (Number.isFinite(startMs) && Number.isFinite(endMs)) {
+        start = new Date(startMs + timing.shift).toISOString();
+        end = new Date(endMs + timing.shift).toISOString();
+      }
+    }
     const walkingDelay = !transit && previousTransit
       ? Math.max(0, Date.parse(previousTransit.end) - Date.parse(start)) : 0;
     if (walkingDelay) {
@@ -423,8 +450,9 @@ function renderSelectedJourney(fit = false) {
       fillColor: '#0284c7', fillOpacity: 1 }).addTo(journey.layer);
   }
   updateMapFocus();
-  const departure = rows[0]?.time;
-  const arrival = rows.at(-1)?.time;
+  const departure = timing.start;
+  const arrival = rows.at(-1)?.time ?? timing.end;
+  const firstBoarding = timing.firstTransit === 0 ? Date.parse(journeyStops(option.legs[0])[0]?.departure ?? option.legs[0].startTime) : NaN;
   details.innerHTML = `<div class="journey-detail-header space-y-2">
     <div class="flex justify-between gap-2">
       <button type="button" class="journey-secondary" onclick="endJourneyTracking()" aria-label="ვარიანტები">${backArrow}</button>
@@ -435,6 +463,7 @@ function renderSelectedJourney(fit = false) {
       Number.isFinite(departure) ? new Date(departure).toISOString() : option.startTime,
       Number.isFinite(arrival) ? new Date(arrival).toISOString() : option.endTime)}
       · ${journeyMinutes((arrival - departure) / 1000)} · ${journeyTransfers(option.transfers)}</p>
+    ${Number.isFinite(firstBoarding) ? `<p class="walk-eta text-xs" data-transfer-departure="${firstBoarding}" data-transfer-ready="${departure}">${waitingMarkup}</p>` : ''}
     <p id="journeyProgressStatus" class="journey-muted text-[11px]"></p>
   </div>${legs}`;
   updateJourneyProgress();
@@ -508,8 +537,9 @@ function updateJourneyProgress() {
     item.classList.toggle('waiting-text', !known);
     item.textContent = !known ? waitingText : departure <= now ? 'რეისი გასულია' :
       ready > departure ? 'გადასაჯდომად დრო არ კმარა' :
-      `გასვლამდე: ${journey.searchMode === 'now' ? formatCountdown(departure, now)
-        : journeyMinutes((departure - Math.max(now, ready)) / 1000)}`;
+      `გასვლამდე: ${journey.searchMode === 'arrive'
+        ? journeyMinutes((departure - Math.max(now, ready)) / 1000)
+        : formatCountdown(departure, Math.max(now, journeyTiming(journey.selected).start))}`;
 
   }
   if (next === -1) stopJourneyLocation();

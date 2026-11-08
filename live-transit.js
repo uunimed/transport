@@ -112,15 +112,15 @@
       const place = item.place ?? {};
       const cancelled = item.tripCancelled === true;
       const skipped = !cancelled && (item.cancelled === true || place.cancelled === true);
-      const hasLiveTime = item.realTime === true &&
+      const hasLiveDeparture = item.realTime === true &&
         !['NO_RT_DATA', 'INCONSISTENT_RT'].includes(place.departureTimestampReason);
       const platformChanged = place.track && place.scheduledTrack && place.track !== place.scheduledTrack;
       const planned = includeScheduled && !cancelled && !skipped &&
         Number.isFinite(Date.parse(place.scheduledDeparture ?? place.departure));
-      if (!item.tripId || !(cancelled || skipped || hasLiveTime || platformChanged || planned)) return [];
-      const scheduledOnly = Boolean(planned && !hasLiveTime && !platformChanged);
-      const when = hasLiveTime ? place.departure : scheduledOnly ? (place.scheduledDeparture ?? place.departure) : null;
-      const delay = hasLiveTime ? (Date.parse(when) - Date.parse(place.scheduledDeparture)) / 1000 : NaN;
+      if (!item.tripId || !(cancelled || skipped || hasLiveDeparture || platformChanged || planned)) return [];
+      const scheduledOnly = Boolean(planned && !hasLiveDeparture && !platformChanged);
+      const when = hasLiveDeparture ? place.departure : scheduledOnly ? (place.scheduledDeparture ?? place.departure) : null;
+      const delay = hasLiveDeparture ? (Date.parse(when) - Date.parse(place.scheduledDeparture)) / 1000 : NaN;
       return [{
         tripId: item.tripId,
         line: { name: item.displayName || item.routeShortName || item.mode, product: item.mode },
@@ -128,6 +128,7 @@
         when,
         scheduledWhen: place.scheduledDeparture,
         scheduledOnly,
+        arrivalOnly: item.arrivalOnly === true,
         arrival: scheduledOnly ? (place.scheduledArrival ?? place.arrival) : place.arrival,
         firstStop: Boolean(place.stopId && item.tripFrom?.stopId === place.stopId),
         arrivalLive: !scheduledOnly && hasLiveTime(place.arrivalTimestampReason),

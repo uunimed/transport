@@ -420,8 +420,7 @@
     .walk-link .walk-eta { color: var(--ui-accent); font-weight: 750; }
     .vehicle-tooltip-heading { display: flex; align-items: center; gap: .25rem; }
     .journey-date-fields { display: grid; grid-template-columns: 1fr 1fr; gap: .55rem; }
-    .journey-clock-input { display: flex; align-items: center; gap: .25rem; color: var(--ui-muted); }
-    .journey-clock-input input { min-width: 0; text-align: center; font-variant-numeric: tabular-nums; }
+    .journey-clock-input { text-align: center; font-variant-numeric: tabular-nums; }
     .stop-cluster { display: grid; place-items: center; width: 100%; height: 100%; border: 2px solid #b9f3d6;
       border-radius: 50%; background: #0b6249; color: #fff; font-size: 11px; font-weight: 800; box-shadow: 0 2px 8px #0007; }
     .stop-cluster-options { display: grid; gap: .3rem; max-height: 14rem; overflow-y: auto; }
@@ -646,12 +645,9 @@
                 <div class="journey-date-fields">
                   <div><label for="journeyDate">თარიღი</label><input id="journeyDate" type="date" disabled></div>
                   <div>
-                    <label for="journeyHour">დრო · გერმანიის დროით</label>
-                    <div class="journey-clock-input">
-                      <input id="journeyHour" type="text" inputmode="numeric" maxlength="2" pattern="(?:[01]?[0-9]|2[0-3])" autocomplete="off" aria-label="საათი" disabled>
-                      <span aria-hidden="true">:</span>
-                      <input id="journeyMinute" type="text" inputmode="numeric" maxlength="2" pattern="(?:[0-5]?[0-9])" autocomplete="off" aria-label="წუთი" disabled>
-                    </div>
+                    <label for="journeyClock">დრო · გერმანიის დროით</label>
+                    <input id="journeyClock" class="journey-clock-input" type="text" inputmode="numeric"
+                      maxlength="5" pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]" placeholder="HH:MM" autocomplete="off" disabled>
                   </div>
                 </div>
               </div>
@@ -833,7 +829,7 @@
 
   </div>
 
-  <script src="live-transit.js?v=7"></script>
+  <script src="live-transit.js?v=8"></script>
   <script>
     /*************************************************************************
      * 1. SUPABASE CLIENT
@@ -1253,7 +1249,7 @@
           const coordinates = stopLatLng(stop);
           if (!bounds.contains(coordinates)) continue;
           const point = map.project(coordinates, zoom);
-          const size = zoom < 14 ? 66 : zoom < 17 ? 48 : 30;
+          const size = zoom < 14 ? 100 : zoom < 17 ? 78 : 50;
           const key = stop.id === selectedId ? 'selected:' + stop.id : zoom >= 19
             ? coordinates.map(value => value.toFixed(6)).join(',')
             : `${Math.floor(point.x / size)}:${Math.floor(point.y / size)}`;
@@ -1357,13 +1353,46 @@
 
     function boardEvents(data, stop) {
       if (!Array.isArray(data?.stopTimes)) return null;
-      return data.stopTimes.filter(event => event && (!stop.platformOnly || event.place?.stopId === stop.id));
+      return data.stopTimes.filter(event => event && (!stop.platformOnly || belongsToBoard(event.place, stop)));
     }
 
     const fallbackTripCache = new Map();
 
     function belongsToBoard(place, stop) {
-      return place?.stopId === stop.id || (!stop.platformOnly && place?.parentId === stop.id);
+      if (!place) return false;
+      if (place.stopId === stop.id || (!stop.platformOnly && place.parentId === stop.id)) return true;
+      // A complete platform DHID remains stable when the data-provider prefix changes.
+      const platformId = value => String(value ?? '').match(/(?:^|_)(de:[0-9]+:[^:]+:[^:]*:[^:]+)$/)?.[1];
+      const selected = platformId(stop.id);
+      if (selected && selected === platformId(place.stopId)) return true;
+      if (!stop.location || ![place.lat, place.lon].every(Number.isFinite)) return false;
+      const name = value => String(value ?? '').normalize('NFC').trim().toLocaleLowerCase('de-DE');
+      const track = place.track ?? place.scheduledTrack;
+      if (!stop.platform || !track || name(track) !== name(stop.platform) || name(place.name) !== name(stop.name)) return false;
+      return haversineMeters(...stopLatLng(stop), place.lat, place.lon) <= 20;
+    }
+
+    function boardEventsFromSegments(trips, stop, now) {
+      const events = [];
+      const lower = now - 8000, upper = now + 15 * 60_000;
+      for (const [tripId, trip] of trips) {
+        const outgoing = trip.legs.find(leg => leg.departure >= lower && leg.departure <= upper &&
+          !leg.from?.cancelled && leg.from?.pickupType !== 'NOT_ALLOWED' && belongsToBoard(leg.from, stop));
+        const incoming = trip.legs.find(leg => leg.arrival >= lower && leg.arrival <= upper &&
+          !leg.to?.cancelled && belongsToBoard(leg.to, stop));
+        const leg = outgoing ?? incoming;
+        if (!leg) continue;
+        const place = outgoing ? outgoing.from : incoming.to;
+        const arrival = incoming?.arrival ?? outgoing.departure;
+        const departure = outgoing?.departure ?? arrival;
+        events.push({
+          tripId, displayName: trip.line.name, mode: trip.line.product, headsign: trip.direction,
+          realTime: true, arrivalOnly: !outgoing,
+          place: { ...place, arrival: new Date(arrival).toISOString(), departure: new Date(departure).toISOString(),
+            arrivalTimestampReason: 'PREDICTED', departureTimestampReason: 'PREDICTED' }
+        });
+      }
+      return events;
     }
 
     async function boardFromNearbyTrips(stop, now) {
@@ -1380,14 +1409,17 @@
         }
         return candidates;
       }
-      let candidates = now - tripsFetchedAt <= LiveTransit.MAX_POSITION_AGE_MS
-        ? nearbyCandidates(activeTripsCache) : [];
+      let trips = now - tripsFetchedAt <= LiveTransit.MAX_POSITION_AGE_MS ? activeTripsCache : new Map();
+      let candidates = nearbyCandidates(trips);
       if (!candidates.length) {
         const [lat, lon] = selected;
         const area = `min=${lat - .02},${lon - .025}&max=${lat + .02},${lon + .025}`;
         const time = `startTime=${new Date(now - 120_000).toISOString()}&endTime=${new Date(now + 120_000).toISOString()}`;
         const data = await safeFetchJSON(`${TRANSITOUS_BASE}/api/v5/map/trips?${area}&${time}&zoom=15`, 5000);
-        if (Array.isArray(data)) candidates = nearbyCandidates(LiveTransit.mapTrips(data, now));
+        if (Array.isArray(data)) {
+          trips = LiveTransit.mapTrips(data, now);
+          candidates = nearbyCandidates(trips);
+        }
       }
       candidates.sort((a, b) => a.rank - b.rank);
       const responses = await Promise.all(candidates.slice(0, 4).map(async ({ id }) => {
@@ -1399,14 +1431,14 @@
         fallbackTripCache.set(id, { time: now, legs });
         return legs;
       }));
-      const events = new Map();
+      const events = new Map(boardEventsFromSegments(trips, stop, now).map(event => [event.tripId, event]));
       for (const leg of responses.flat()) {
         for (const place of [leg.from, ...(leg.intermediateStops ?? [])]) {
           const departure = Date.parse(place?.departure ?? place?.scheduledDeparture);
           if (!belongsToBoard(place, stop) || place.cancelled || leg.cancelled ||
               place.pickupType === 'NOT_ALLOWED' || !Number.isFinite(departure) ||
               departure < now - 8000 || departure > now + 3_600_000) continue;
-          const key = JSON.stringify([leg.tripId, place.stopId, departure]);
+          const key = leg.tripId;
           events.set(key, { ...leg, place,
             realTime: LiveTransit.hasLiveTime(place.departureTimestampReason), tripCancelled: false });
         }
@@ -1444,11 +1476,15 @@
         if (!Array.isArray(data?.stopTimes)) data = await fetchBoard(now - 60_000, '&n=30', 'v6');
         if (request !== departuresRequest) return;
         const board = boardEvents(data, stop);
-        const fallback = !board?.length ? await boardFromNearbyTrips(stop, now) : [];
+        const visible = now - tripsFetchedAt <= LiveTransit.MAX_POSITION_AGE_MS
+          ? boardEventsFromSegments(activeTripsCache, stop, now) : [];
+        const fallback = !board?.length ? await boardFromNearbyTrips(stop, now) : visible;
         if (request !== departuresRequest) return;
-        const events = fallback.length ? fallback : board;
+        const boardTripIds = new Set((board ?? []).map(event => event.tripId));
+        const added = fallback.filter(event => !boardTripIds.has(event.tripId));
+        const events = board || added.length ? [...(board ?? []), ...added] : null;
         let entries = [];
-        let note = fallback.length ? 'რეისის მარშრუტიდან მიღებული მონაცემები' : '';
+        let note = added.length ? 'რეისის მარშრუტიდან მიღებული მონაცემები' : '';
         if (events) {
           const onDay = (dep, date) => {
             const time = Date.parse(dep.when ?? dep.scheduledWhen);
@@ -1473,7 +1509,7 @@
             if (tomorrow.length) note = `მომდევნო დღე · ${boardDate.format(midnight)}`;
           }
         }
-        currentDepartures = entries;
+        currentDepartures = entries.sort((a, b) => Date.parse(a.when ?? a.scheduledWhen) - Date.parse(b.when ?? b.scheduledWhen));
         stopAlerts = data?.place?.alerts ?? [];
         if (stop.platformOnly) showSelectedPlatform(data?.place?.track || stop.platform);
         departuresStatus = events ? 'ინფორმაცია ვერ მოიძებნა' : 'მონაცემები მიუწვდომელია';
@@ -1541,7 +1577,7 @@
         const cancelled = dep.cancelled || dep.skipped;
         const time = Date.parse(dep.when);
         const planned = Date.parse(dep.scheduledWhen);
-        const status = dep.cancelled ? 'გაუქმებულია' : dep.skipped ? 'გაჩერებას გამოტოვებს' :
+        const status = dep.cancelled ? 'გაუქმებულია' : dep.skipped ? 'გაჩერებას გამოტოვებს' : dep.arrivalOnly ? 'მოსვლა' :
           !Number.isFinite(delay) ? '' : delay > 0 ? `+${delay} წთ დაგვიანება` :
           delay < 0 ? `${Math.abs(delay)} წთ ადრე` : 'დროულად';
         return `
@@ -2189,6 +2225,6 @@
       toastTimer = setTimeout(() => box.classList.add('hidden'), 3500);
     }
   </script>
-  <script src="journey.js?v=5"></script>
+  <script src="journey.js?v=6"></script>
 </body>
 </html>

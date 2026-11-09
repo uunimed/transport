@@ -836,7 +836,7 @@
 
   </div>
 
-  <script src="live-transit.js?v=18"></script>
+  <script src="live-transit.js?v=19"></script>
   <script>
     /*************************************************************************
      * 1. SUPABASE CLIENT
@@ -1592,9 +1592,10 @@
         }
         const operator = await vmsUpdates;
         if (request !== departuresRequest) return;
-        if (board && operator.length) board = LiveTransit.mergeVmsBoard(board, operator);
+        const operatorStop = { ...stop, platformLabel: LiveTransit.platformLabel(data?.place) || stop.platformLabel };
+        const initialBoard = LiveTransit.vmsBoardEvents(board ?? [], operator, operatorStop);
         const today = LiveTransit.berlinLocal(now).slice(0, 10);
-        const hasCurrent = LiveTransit.departures(board ?? [], true).some(dep =>
+        const hasCurrent = LiveTransit.departures(initialBoard, true).some(dep =>
           Number.isFinite(boardTime(dep)) && isUpcomingBoardDeparture(dep, now) &&
           LiveTransit.berlinLocal(boardTime(dep)).slice(0, 10) === today);
         const visible = now - tripsFetchedAt <= LiveTransit.MAX_POSITION_AGE_MS
@@ -1606,7 +1607,7 @@
         ]);
         if (request !== departuresRequest) return;
         const arrivals = boardEvents(arrivalsData, stop);
-        boardConnectionIssue = board === null && arrivals === null;
+        boardConnectionIssue = board === null && arrivals === null && !initialBoard.length;
         if (boardConnectionIssue && currentDepartures.length) {
           updateDepartureCountdowns();
           return;
@@ -1619,8 +1620,9 @@
             represented.add(event.tripId);
           }
         }
-        const entries = LiveTransit.departures(events, true).filter(dep => isUpcomingBoardDeparture(dep, now));
-        const note = entries.some(dep => fallback.some(event => event.tripId === dep.tripId) &&
+        const combined = LiveTransit.vmsBoardEvents(events, operator, operatorStop);
+        const entries = LiveTransit.departures(combined, true).filter(dep => isUpcomingBoardDeparture(dep, now));
+        const note = entries.some(dep => dep.operatorKey) ? 'Chemnitz · VMS' : entries.some(dep => fallback.some(event => event.tripId === dep.tripId) &&
           !(board ?? []).some(event => event.tripId === dep.tripId)) ? 'რეისის მარშრუტიდან მიღებული მონაცემები' : '';
         const loaded = board !== null || arrivals !== null || entries.length > 0;
         if (!loaded && silent && currentDepartures.length) return;
@@ -1629,6 +1631,8 @@
           if (!paging.arrivalOnly && boardTime(dep) < headHorizon) paging.tail.delete(key);
         }
         paging.head = entries;
+        paging.operator = operator;
+        paging.operatorStop = operatorStop;
         if (!paging.cursors.size && !paging.loading) {
           const arrivalOnly = !data?.stopTimes?.length && Boolean(arrivalsData?.stopTimes?.length);
           paging.cursor = (arrivalOnly ? arrivalsData : data)?.nextPageCursor ?? '';
@@ -1677,7 +1681,7 @@
     }
 
     function boardDepartureKey(dep) {
-      return JSON.stringify([dep.tripId, dep.stopId, dep.scheduledWhen ?? dep.when]);
+      return dep.operatorKey ?? JSON.stringify([dep.tripId, dep.stopId, dep.scheduledWhen ?? dep.when]);
     }
 
     function mergeBoardPages(paging, now = Date.now()) {
@@ -1685,7 +1689,13 @@
         if (!isUpcomingBoardDeparture(dep, now)) paging.tail.delete(key);
       }
       const entries = new Map(paging.tail);
-      for (const dep of paging.head) entries.set(boardDepartureKey(dep), dep);
+      for (const dep of paging.head) {
+        const key = boardDepartureKey(dep);
+        const linked = entries.get(key);
+        entries.set(key, dep.operatorOnly && linked && !linked.operatorOnly
+          ? { ...linked, ...dep, tripId: linked.tripId, stopId: linked.stopId, operatorOnly: false }
+          : dep);
+      }
       currentDepartures = [...entries.values()].filter(dep => isUpcomingBoardDeparture(dep, now))
         .sort((a, b) => boardTime(a) - boardTime(b));
     }
@@ -1718,7 +1728,8 @@
           const next = data.nextPageCursor;
           paging.cursor = data.stopTimes.length && next && !paging.cursors.has(next) ? next : '';
           const rows = paging.arrivalOnly ? events.map(event => ({ ...event, arrivalOnly: true })) : events;
-          for (const dep of LiveTransit.departures(rows, true)) paging.tail.set(boardDepartureKey(dep), dep);
+          const matched = LiveTransit.vmsBoardEvents(rows, paging.operator ?? [], paging.operatorStop ?? paging.stop, false);
+          for (const dep of LiveTransit.departures(matched, true)) paging.tail.set(boardDepartureKey(dep), dep);
           mergeBoardPages(paging);
         }
       } catch {
@@ -1821,7 +1832,7 @@
           delay < 0 ? `${Math.abs(delay)} წთ ადრე` : 'დროულად';
         return `
           <div>
-            <button type="button" onclick="openVehicleInSidebar('${tripClick(dep.tripId)}', true, ${currentDepartures.indexOf(dep)})"
+            <button type="button" ${dep.operatorOnly ? 'disabled' : `onclick="openVehicleInSidebar('${tripClick(dep.tripId)}', true, ${currentDepartures.indexOf(dep)})"`}
               class="departure-card${tint}" ${cancelled ? '' : `data-board-trip="${currentDepartures.indexOf(dep)}"`}>
               <span class="departure-line" style="--line-color:${style.bg}; color:var(--line-color)">${style.svg} ${escapeHTML(style.formattedLabel)}</span>
               <span class="departure-main">
@@ -1835,7 +1846,7 @@
                 </span>
               </span>
               <span class="departure-count" ${cancelled ? 'hidden' : ''}>
-                <span data-countdown class="inline-block max-w-28 whitespace-normal">${waitingMarkup}</span><small>${dep.operatorForecast && !dep.arrivalLive ? 'გასვლამდე · VMS' : 'რუკაზე ნახვა'}</small>
+                <span data-countdown class="inline-block max-w-28 whitespace-normal">${waitingMarkup}</span><small>${dep.operatorOnly ? 'VMS · მხოლოდ ტაბლო' : dep.operatorForecast && !dep.arrivalLive ? 'გასვლამდე · VMS' : 'რუკაზე ნახვა'}</small>
               </span>
             </button>
             ${renderAlerts(dep.alerts)}

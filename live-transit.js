@@ -83,9 +83,11 @@
     return fresh;
   }
 
-  const operatorModes = { Tram: 'TRAM', CityBus: 'BUS', RegionalBus: 'BUS', IntercityBus: 'BUS',
+  const operatorModes = { Tram: 'TRAM', CityBus: 'BUS', RegionalBus: 'BUS', IntercityBus: 'BUS', PlusBus: 'BUS',
     SuburbanRailway: 'SUBURBAN', Train: 'REGIONAL_RAIL' };
   const operatorName = value => String(value ?? '').toLocaleLowerCase('de-DE').replace(/[^\p{L}\p{N}]/gu, '');
+  const operatorDirection = value => operatorName(String(value ?? '')
+    .replace(/,\s*(?:Bahnhof|Bf\.?)\s*$/i, '').replace(/\bHbf\b/gi, 'Hauptbahnhof'));
   const operatorTime = value => Number(String(value ?? '').match(/^\/Date\((\d+)/)?.[1] ?? NaN);
   const chemnitzStationId = value => String(value ?? '').match(/(?:^|_)de:14511:(\d+)(?=[:_]|$)/i)?.[1];
 
@@ -95,38 +97,75 @@
       const scheduled = operatorTime(row.ScheduledTime), predicted = operatorTime(row.RealTime);
       if (!row.LineName || !operatorModes[row.Mot] || !Number.isFinite(scheduled)) return [];
       const cancelled = row.State === 'Cancelled';
-      if (!cancelled && !Number.isFinite(predicted)) return [];
-      return [{ line: row.LineName, mode: operatorModes[row.Mot], direction: row.Direction,
+      return [{ id: row.Id, line: row.LineName, mode: operatorModes[row.Mot], direction: row.Direction,
         scheduled, predicted, platform: row.Platform?.Name, cancelled }];
     });
   }
 
-  function mergeVmsBoard(events, official) {
-    return events.map(event => {
+  function vmsBoardEvents(events, official, stop, includeUnmatched = true) {
+    if (!official.length) return events;
+    const station = chemnitzStationId(stop.id);
+    const key = row => JSON.stringify([station, row.id, row.line, row.direction, row.scheduled, row.platform]);
+    const matches = events.map(event => {
       const place = event.place;
-      if (event.arrivalOnly || event.cancelled || event.tripCancelled || place?.cancelled ||
-          place?.departureTimestampReason === 'OBSERVED') return event;
+      if (event.arrivalOnly) return null;
       const line = operatorName(event.displayName || event.routeShortName);
-      const direction = operatorName(event.headsign || event.tripTo?.name);
+      const direction = operatorDirection(event.headsign || event.tripTo?.name);
       const scheduled = Date.parse(place?.scheduledDeparture ?? place?.departure);
       const match = official.filter(row => operatorName(row.line) === line &&
         row.mode === event.mode && row.scheduled === scheduled &&
-        direction && operatorName(row.direction) === direction &&
-        (!row.platform || !platformLabel(place) || operatorName(row.platform) === operatorName(platformLabel(place))));
-      if (match.length !== 1) return event;
-      const [row] = match;
-      if (row.cancelled) return { ...event, tripCancelled: true, operatorForecast: true };
-      return { ...event, realTime: true, operatorForecast: true, place: {
-        ...place, departure: new Date(row.predicted).toISOString(), departureTimestampReason: 'PREDICTED'
-      } };
+        direction && operatorDirection(row.direction) === direction);
+      return match.length === 1 ? match[0] : null;
     });
+    const counts = new Map();
+    for (const row of matches) if (row) counts.set(row, (counts.get(row) ?? 0) + 1);
+    const used = new Set();
+    const platform = operatorName(stop.platformLabel ?? platformLabel({ track: stop.platform }));
+    const horizons = new Map();
+    for (const row of official) {
+      const [first, last] = horizons.get(row.mode) ?? [Infinity, -Infinity];
+      horizons.set(row.mode, [Math.min(first, row.scheduled), Math.max(last, row.scheduled)]);
+    }
+    const apply = (event, row) => {
+      const observed = event.place.departureTimestampReason === 'OBSERVED';
+      const forecast = Number.isFinite(row.predicted);
+      return { ...event, operatorKey: key(row), tripCancelled: event.tripCancelled || row.cancelled,
+        realTime: event.realTime || forecast, operatorForecast: forecast && !observed, place: {
+          ...event.place, track: row.platform || event.place.track,
+          ...(forecast && !observed ? { departure: new Date(row.predicted).toISOString(), departureTimestampReason: 'PREDICTED' } : {})
+        } };
+    };
+    const result = events.flatMap((event, index) => {
+      const row = matches[index];
+      if (row && counts.get(row) === 1) {
+        if (stop.platformOnly && platform && row.platform && platform !== operatorName(row.platform)) return [];
+        used.add(key(row));
+        return [apply(event, row)];
+      }
+      const [first, last] = horizons.get(event.mode) ?? [];
+      const when = Date.parse(event.place?.scheduledDeparture ?? event.place?.departure);
+      return stop.platformOnly || event.arrivalOnly || event.tripCancelled || event.cancelled ||
+        !event.headsign && !event.tripTo?.name || !(when >= first && when <= last) ? [event] : [];
+    });
+    if (!includeUnmatched) return result;
+    for (const row of official) {
+      const id = key(row);
+      if (used.has(id) || stop.platformOnly && (!platform || platform !== operatorName(row.platform))) continue;
+      used.add(id);
+      const scheduledDeparture = new Date(row.scheduled).toISOString();
+      result.push(apply({ tripId: 'vms:' + id, operatorOnly: true, mode: row.mode,
+        displayName: row.line, headsign: row.direction, place: {
+          stopId: stop.id, departure: scheduledDeparture, scheduledDeparture, departureTimestampReason: 'NO_RT_DATA'
+        } }, row));
+    }
+    return result;
   }
 
   function applyVmsMapTimes(segments, stations, now = Date.now()) {
     const corrections = new Map();
     for (const [stationId, rows] of stations) {
       for (const row of rows) {
-        if (row.cancelled || row.mode !== 'TRAM') continue;
+        if (row.cancelled || row.mode !== 'TRAM' || !Number.isFinite(row.predicted)) continue;
         const ids = new Set();
         for (const segment of segments) {
           if (segment.mode !== row.mode || chemnitzStationId(segment.from?.stopId) !== stationId ||
@@ -265,6 +304,8 @@
         scheduledWhen: scheduledTime,
         scheduledOnly,
         operatorForecast: item.operatorForecast === true,
+        operatorKey: item.operatorKey,
+        operatorOnly: item.operatorOnly === true,
         arrivalOnly,
         arrival: hasLiveTime(place.arrivalTimestampReason) ? place.arrival : (place.scheduledArrival ?? place.arrival),
         departure: place.departure,
@@ -485,7 +526,7 @@
     return positions;
   }
 
-  const api = { berlinLocal, berlinInstant, nextBerlinDay, hasLiveTime, positionOnRoute, routeProgress, remainingRoute, throughService, mapTrips, mergeMapTrips, vmsDepartures, mergeVmsBoard, applyVmsMapTimes, chemnitzStationId, estimatedPosition, platformLabel, departures, stopStatus, isPlannedDeparture, boardArrival, decodePolyline, vehiclePositions, MAX_POSITION_AGE_MS, MAP_TRIP_WINDOW_MS };
+  const api = { berlinLocal, berlinInstant, nextBerlinDay, hasLiveTime, positionOnRoute, routeProgress, remainingRoute, throughService, mapTrips, mergeMapTrips, vmsDepartures, vmsBoardEvents, applyVmsMapTimes, chemnitzStationId, estimatedPosition, platformLabel, departures, stopStatus, isPlannedDeparture, boardArrival, decodePolyline, vehiclePositions, MAX_POSITION_AGE_MS, MAP_TRIP_WINDOW_MS };
   if (typeof module === 'object') module.exports = api;
   else root.LiveTransit = api;
 })(globalThis);

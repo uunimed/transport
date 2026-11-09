@@ -179,6 +179,8 @@
         departureObserved: place.departureTimestampReason === 'OBSERVED',
         stopId: place.stopId,
         delay,
+        arrivalDelay: hasLiveTime(place.arrivalTimestampReason)
+          ? (Date.parse(place.arrival) - Date.parse(place.scheduledArrival)) / 1000 : NaN,
         platform: platformLabel(place),
         platformChanged,
         cancelled,
@@ -273,13 +275,13 @@
     for (let index = 0; index < stops.length; index++) {
       const stop = stops[index];
       if (stop.cancelled) continue;
-      const arrival = Date.parse(stop.arrival);
+      const arrival = Date.parse(stop.arrival ?? stop.scheduledArrival);
       const next = stops.slice(index + 1).find(place => !place.cancelled);
-      const rawDeparture = Date.parse(stop.departure);
+      const rawDeparture = Date.parse(stop.departure ?? stop.scheduledDeparture);
       const terminalHold = !next && !Number.isFinite(rawDeparture);
       const departure = terminalHold ? arrival + FALLBACK_DWELL_MS
         : dwellEnd(arrival, rawDeparture, Date.parse(next?.arrival), stop.departureTimestampReason === 'OBSERVED');
-      if (hasLiveTime(stop.arrivalTimestampReason) && (terminalHold || hasLiveTime(stop.departureTimestampReason)) &&
+      if ((hasLiveTime(stop.arrivalTimestampReason) || hasLiveTime(stop.departureTimestampReason)) &&
           arrival <= now && now < departure) {
         if (Number.isFinite(stop.lat) && Number.isFinite(stop.lon)) return {
           lat: stop.lat, lng: stop.lon, from: stop,
@@ -288,7 +290,8 @@
       }
       if (fromIndex >= 0 && points.length) {
         const from = stops[fromIndex];
-        if (hasLiveTime(from.departureTimestampReason) && hasLiveTime(stop.arrivalTimestampReason) &&
+        // A valid live update at either end is enough to anchor an estimate on this leg.
+        if ((hasLiveTime(from.departureTimestampReason) || hasLiveTime(stop.arrivalTimestampReason)) &&
             start <= now && now < arrival) {
           const section = points.slice(projected[fromIndex], projected[index] + 1);
           const distances = pathDistances(section);

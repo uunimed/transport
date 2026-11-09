@@ -710,7 +710,7 @@
 
             <div id="trackedStopSummary" class="space-y-3">
             <dl id="trackingProgressSummary" class="tracking-summary">
-              <div><dt>დრო</dt><dd id="trackArrival"><span class="waiting-text">მოლოდინში</span></dd></div>
+              <div><dt id="trackArrivalLabel">დრო</dt><dd id="trackArrival"><span class="waiting-text">მოლოდინში</span></dd></div>
               <div><dt>მანძილი</dt><dd id="trackDistance"><span class="waiting-text">მოლოდინში</span></dd></div>
               <div><dt>გაჩერება</dt><dd id="trackRemaining"><span class="waiting-text">მოლოდინში</span></dd></div>
             </dl>
@@ -836,7 +836,7 @@
 
   </div>
 
-  <script src="live-transit.js?v=17"></script>
+  <script src="live-transit.js?v=18"></script>
   <script>
     /*************************************************************************
      * 1. SUPABASE CLIENT
@@ -881,13 +881,14 @@
       )}</p>`).join('');
     }
 
-    async function safeFetchJSON(url, timeoutMs = 4500) {
+    async function safeFetchJSON(url, timeoutMs = 4500, body = null) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
       try {
         const res = await fetch(url, {
           signal: controller.signal,
-          headers: { 'Accept': 'application/json' }
+          headers: { 'Accept': 'application/json', ...(body ? { 'Content-Type': 'application/json' } : {}) },
+          ...(body ? { method: 'POST', body: JSON.stringify(body) } : {})
         });
         if (!res.ok) return null;
         return await res.json();
@@ -896,6 +897,39 @@
       } finally {
         clearTimeout(timer);
       }
+    }
+
+    const vmsApi = 'https://webapi.vvo-online.de';
+    const vmsHubStops = [
+      { id: '30131', operatorId: '36030131', location: [50.8317, 12.9222] },
+      { id: '30263', operatorId: '36030263', location: [50.8090, 12.8930] }
+    ];
+    const vmsStationRequests = new Map();
+    const vmsStationIds = new Map(vmsHubStops.map(stop => [stop.id, stop.operatorId]));
+
+    function fetchVmsDepartures(stationId) {
+      if (!stationId) return Promise.resolve([]);
+      const now = Date.now();
+      const cached = vmsStationRequests.get(stationId);
+      if (cached && now - cached.time < REFRESH_MS) return cached.promise;
+      const promise = (async () => {
+        let id = vmsStationIds.get(stationId);
+        if (!id) {
+          const ifopt = encodeURIComponent(`de:14511:${stationId}`);
+          const lookup = await safeFetchJSON(`${vmsApi}/tr/pointfinder?query=${ifopt}&stopsOnly=true&format=json`, 6500);
+          const matches = (Array.isArray(lookup?.Points) ? lookup.Points : [])
+            .map(point => String(point).split('|')).filter(([number, type, city]) =>
+              /^\d+$/.test(number) && !type && city === 'Chemnitz');
+          if (matches.length !== 1) return [];
+          id = matches[0][0];
+          vmsStationIds.set(stationId, id);
+        }
+        const data = await safeFetchJSON(`${vmsApi}/dm?format=json`, 7000, { stopid: id, limit: 40 });
+        return data?.Place === 'Chemnitz' ? LiveTransit.vmsDepartures(data) : [];
+      })();
+      if (vmsStationRequests.size >= 24) vmsStationRequests.delete(vmsStationRequests.keys().next().value);
+      vmsStationRequests.set(stationId, { time: now, promise });
+      return promise;
     }
 
     /*************************************************************************
@@ -1240,6 +1274,10 @@
       const wider = bounds.pad(.35);
       const vehicleArea = `min=${wider.getSouth().toFixed(4)},${wider.getWest().toFixed(4)}&max=${wider.getNorth().toFixed(4)},${wider.getEast().toFixed(4)}`;
       const now = Date.now();
+      const stationIds = new Set(vmsHubStops.filter(stop => wider.contains(stop.location)).map(stop => stop.id));
+      const selectedStation = LiveTransit.chemnitzStationId(selectedStop?.id);
+      if (selectedStation) stationIds.add(selectedStation);
+      const vmsUpdates = Promise.all([...stationIds].map(async id => [id, await fetchVmsDepartures(id)]));
       const windowMs = LiveTransit.MAP_TRIP_WINDOW_MS;
       const time = `startTime=${new Date(now - windowMs).toISOString()}&endTime=${new Date(now + windowMs).toISOString()}`;
       const fetchTrips = async () => {
@@ -1264,8 +1302,14 @@
       }
 
       if (Array.isArray(segments)) {
-        activeTripsCache = LiveTransit.mergeMapTrips(activeTripsCache, segments, now);
+        activeTripsCache = LiveTransit.mergeMapTrips(activeTripsCache, LiveTransit.applyVmsMapTimes(segments, [], now), now);
         tripsFetchedAt = now;
+        vmsUpdates.then(stations => {
+          if (request !== viewportRequest || !stations.some(([, rows]) => rows.length)) return;
+          const adjusted = LiveTransit.applyVmsMapTimes(segments, stations, now);
+          activeTripsCache = LiveTransit.mergeMapTrips(activeTripsCache, adjusted, now);
+          updateLiveMarkers();
+        });
       }
       if (Array.isArray(positionData?.vehicles)) {
         liveVehiclesState = LiveTransit.vehiclePositions(positionData.vehicles, Date.now());
@@ -1522,6 +1566,7 @@
         return;
       }
       try {
+        const vmsUpdates = fetchVmsDepartures(LiveTransit.chemnitzStationId(stop.id));
         const scope = stop.platformOnly ? '&radius=0&exactRadius=true' : '';
         const fetchBoard = (time, { extra = '', version = 'v5', nearby = false } = {}, cursor) => {
           const area = nearby && stop.location ? `&center=${stopLatLng(stop).join(',')}&radius=35` : scope;
@@ -1545,6 +1590,9 @@
             source = fallbackSource;
           }
         }
+        const operator = await vmsUpdates;
+        if (request !== departuresRequest) return;
+        if (board && operator.length) board = LiveTransit.mergeVmsBoard(board, operator);
         const today = LiveTransit.berlinLocal(now).slice(0, 10);
         const hasCurrent = LiveTransit.departures(board ?? [], true).some(dep =>
           Number.isFinite(boardTime(dep)) && isUpcomingBoardDeparture(dep, now) &&
@@ -1728,12 +1776,13 @@
           return;
         }
         const position = mapVehiclePosition(dep.tripId, now);
-        const planned = !position && (dep.scheduledOnly || LiveTransit.isPlannedDeparture(dep, now, today));
+        const distant = LiveTransit.isPlannedDeparture(dep, now, today);
+        const planned = !position && (dep.scheduledOnly || distant);
         const atStop = isBoardVehicleAtStop(dep, position, now);
         const stopStatus = LiveTransit.stopStatus(dep, position, now);
         const departure = Date.parse(dep.when ?? dep.scheduledWhen);
         const plannedChip = row.querySelector('[data-board-planned]');
-        plannedChip.classList.toggle('hidden', !planned || !LiveTransit.isPlannedDeparture(dep, now, today));
+        plannedChip.classList.toggle('hidden', !planned);
         row.querySelector('[data-board-status]')?.classList.toggle('hidden', planned);
         row.hidden = !stopStatus && !atStop && boardEventExpired(dep, departure, now);
         row.parentElement.hidden = row.hidden;
@@ -1741,9 +1790,10 @@
         const mapTrip = activeTripsCache.get(dep.tripId);
         const mapArrival = position && now - mapTrip?.fetchedAt <= LiveTransit.MAX_POSITION_AGE_MS
           ? mapTrip.legs.find(leg => leg.to?.stopId === dep.stopId && leg.arrival > now)?.arrival : NaN;
-        const eta = arrival > now ? arrival : mapArrival > now ? mapArrival : departure;
+        const eta = dep.operatorForecast && !dep.arrivalLive ? departure
+          : arrival > now ? arrival : mapArrival > now ? mapArrival : departure;
         const label = stopStatusLabels[stopStatus] ?? (atStop ? 'გაჩერებაზეა'
-          : planned ? (LiveTransit.isPlannedDeparture(dep, now, today) ? boardDate.format(departure) : plannedText)
+          : planned && distant ? boardDate.format(departure)
           : !(eta > now) ? unavailableText : null);
         paintCountdown(row.querySelector('[data-countdown]'), eta, now, label);
       });
@@ -1785,7 +1835,7 @@
                 </span>
               </span>
               <span class="departure-count" ${cancelled ? 'hidden' : ''}>
-                <span data-countdown class="inline-block max-w-28 whitespace-normal">${waitingMarkup}</span><small>რუკაზე ნახვა</small>
+                <span data-countdown class="inline-block max-w-28 whitespace-normal">${waitingMarkup}</span><small>${dep.operatorForecast && !dep.arrivalLive ? 'გასვლამდე · VMS' : 'რუკაზე ნახვა'}</small>
               </span>
             </button>
             ${renderAlerts(dep.alerts)}
@@ -2162,11 +2212,14 @@
       const trip = activeTripsCache.get(activeId);
       const mapArrival = now - trip?.fetchedAt <= LiveTransit.MAX_POSITION_AGE_MS
         ? trip.legs.find(leg => leg.to?.stopId === targetStop?.stopId && leg.arrival > now)?.arrival : NaN;
+      const operatorDeparture = boardDeparture?.operatorForecast && !targetEvent?.arrivalLive
+        ? Date.parse(boardDeparture.when) : NaN;
       const routeArrival = Date.parse(targetEvent?.arrival ?? targetStop?.scheduledArrival);
-      const eta = routeArrival > now ? routeArrival : mapArrival;
+      const eta = operatorDeparture > now ? operatorDeparture : routeArrival > now ? routeArrival : mapArrival;
+      setTrackingText('trackArrivalLabel', operatorDeparture > now ? 'გასვლამდე' : 'დრო');
       paintCountdown(document.getElementById('trackArrival'), eta, now,
         connectionIssue ? connectionText : cancelled ? 'გაუქმებულია' : stopStatusLabels[stopStatus] ?? (atTarget ? 'გაჩერებაზეა'
-          : fallback === plannedText || !(eta > now) ? fallback : null));
+          : !(eta > now) ? fallback : null));
       const remaining = position && current >= 0 && target >= 0
         ? stops.slice(current + 1, target).filter(stop => !stop.cancelled).length : null;
       setTrackingText('trackRemaining', cancelled ? 'გაუქმებულია' : remaining === null ? fallback : String(remaining));

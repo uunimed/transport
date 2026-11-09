@@ -83,6 +83,99 @@
     return fresh;
   }
 
+  const operatorModes = { Tram: 'TRAM', CityBus: 'BUS', RegionalBus: 'BUS', IntercityBus: 'BUS',
+    SuburbanRailway: 'SUBURBAN', Train: 'REGIONAL_RAIL' };
+  const operatorName = value => String(value ?? '').toLocaleLowerCase('de-DE').replace(/[^\p{L}\p{N}]/gu, '');
+  const operatorTime = value => Number(String(value ?? '').match(/^\/Date\((\d+)/)?.[1] ?? NaN);
+  const chemnitzStationId = value => String(value ?? '').match(/(?:^|_)de:14511:(\d+)(?=[:_]|$)/i)?.[1];
+
+  function vmsDepartures(data) {
+    if (data?.Status?.Code !== 'Ok' || !Array.isArray(data.Departures)) return [];
+    return data.Departures.flatMap(row => {
+      const scheduled = operatorTime(row.ScheduledTime), predicted = operatorTime(row.RealTime);
+      if (!row.LineName || !operatorModes[row.Mot] || !Number.isFinite(scheduled)) return [];
+      const cancelled = row.State === 'Cancelled';
+      if (!cancelled && !Number.isFinite(predicted)) return [];
+      return [{ line: row.LineName, mode: operatorModes[row.Mot], direction: row.Direction,
+        scheduled, predicted, platform: row.Platform?.Name, cancelled }];
+    });
+  }
+
+  function mergeVmsBoard(events, official) {
+    return events.map(event => {
+      const place = event.place;
+      if (event.arrivalOnly || event.cancelled || event.tripCancelled || place?.cancelled ||
+          place?.departureTimestampReason === 'OBSERVED') return event;
+      const line = operatorName(event.displayName || event.routeShortName);
+      const direction = operatorName(event.headsign || event.tripTo?.name);
+      const scheduled = Date.parse(place?.scheduledDeparture ?? place?.departure);
+      const match = official.filter(row => operatorName(row.line) === line &&
+        row.mode === event.mode && row.scheduled === scheduled &&
+        direction && operatorName(row.direction) === direction &&
+        (!row.platform || !platformLabel(place) || operatorName(row.platform) === operatorName(platformLabel(place))));
+      if (match.length !== 1) return event;
+      const [row] = match;
+      if (row.cancelled) return { ...event, tripCancelled: true, operatorForecast: true };
+      return { ...event, realTime: true, operatorForecast: true, place: {
+        ...place, departure: new Date(row.predicted).toISOString(), departureTimestampReason: 'PREDICTED'
+      } };
+    });
+  }
+
+  function applyVmsMapTimes(segments, stations, now = Date.now()) {
+    const corrections = new Map();
+    for (const [stationId, rows] of stations) {
+      for (const row of rows) {
+        if (row.cancelled || row.mode !== 'TRAM') continue;
+        const ids = new Set();
+        for (const segment of segments) {
+          if (segment.mode !== row.mode || chemnitzStationId(segment.from?.stopId) !== stationId ||
+              Date.parse(segment.scheduledDeparture ?? segment.departure) !== row.scheduled) continue;
+          for (const trip of segment.trips ?? []) {
+            if (!trip.cancelled && operatorName(trip.displayName) === operatorName(row.line)) ids.add(trip.tripId);
+          }
+        }
+        const competing = rows.filter(candidate => candidate.mode === row.mode && candidate.line === row.line &&
+          candidate.scheduled === row.scheduled);
+        if (ids.size !== 1 || competing.length !== 1) continue;
+        const [id] = ids;
+        if (!corrections.has(id) || corrections.get(id).scheduled < row.scheduled) corrections.set(id, row);
+      }
+    }
+    const transitous = new Map();
+    for (const segment of segments) {
+      if (!segment.realTime || segment.cancelled || segment.mode !== 'TRAM') continue;
+      const scheduled = Date.parse(segment.scheduledDeparture), predicted = Date.parse(segment.departure);
+      if (!Number.isFinite(scheduled) || !Number.isFinite(predicted)) continue;
+      for (const trip of segment.trips ?? []) {
+        if (trip.cancelled || corrections.has(trip.tripId)) continue;
+        const previous = transitous.get(trip.tripId);
+        if (!previous || Math.abs(predicted - now) < Math.abs(previous.predicted - now)) {
+          transitous.set(trip.tripId, { scheduled, predicted });
+        }
+      }
+    }
+    for (const [id, correction] of transitous) corrections.set(id, correction);
+    if (!corrections.size) return segments;
+    return segments.flatMap(segment => {
+      if (segment.realTime || segment.cancelled || segment.mode !== 'TRAM') return [segment];
+      const unchanged = [], adjusted = [];
+      for (const trip of segment.trips ?? []) {
+        const correction = corrections.get(trip.tripId);
+        const departure = Date.parse(segment.scheduledDeparture ?? segment.departure);
+        const arrival = Date.parse(segment.scheduledArrival ?? segment.arrival);
+        if (!correction || trip.cancelled || !Number.isFinite(departure) || !Number.isFinite(arrival)) {
+          unchanged.push(trip);
+          continue;
+        }
+        const delay = correction.predicted - correction.scheduled;
+        adjusted.push({ ...segment, trips: [trip], realTime: true,
+          departure: new Date(departure + delay).toISOString(), arrival: new Date(arrival + delay).toISOString() });
+      }
+      return unchanged.length ? [{ ...segment, trips: unchanged }, ...adjusted] : adjusted;
+    });
+  }
+
   function dwellEnd(arrival, departure, nextArrival, observedDeparture) {
     if (observedDeparture || departure !== arrival || !(nextArrival > departure)) return departure;
     return departure + Math.min(FALLBACK_DWELL_MS, (nextArrival - departure) / 4);
@@ -171,6 +264,7 @@
         when,
         scheduledWhen: scheduledTime,
         scheduledOnly,
+        operatorForecast: item.operatorForecast === true,
         arrivalOnly,
         arrival: hasLiveTime(place.arrivalTimestampReason) ? place.arrival : (place.scheduledArrival ?? place.arrival),
         departure: place.departure,
@@ -391,7 +485,7 @@
     return positions;
   }
 
-  const api = { berlinLocal, berlinInstant, nextBerlinDay, hasLiveTime, positionOnRoute, routeProgress, remainingRoute, throughService, mapTrips, mergeMapTrips, estimatedPosition, platformLabel, departures, stopStatus, isPlannedDeparture, boardArrival, decodePolyline, vehiclePositions, MAX_POSITION_AGE_MS, MAP_TRIP_WINDOW_MS };
+  const api = { berlinLocal, berlinInstant, nextBerlinDay, hasLiveTime, positionOnRoute, routeProgress, remainingRoute, throughService, mapTrips, mergeMapTrips, vmsDepartures, mergeVmsBoard, applyVmsMapTimes, chemnitzStationId, estimatedPosition, platformLabel, departures, stopStatus, isPlannedDeparture, boardArrival, decodePolyline, vehiclePositions, MAX_POSITION_AGE_MS, MAP_TRIP_WINDOW_MS };
   if (typeof module === 'object') module.exports = api;
   else root.LiveTransit = api;
 })(globalThis);

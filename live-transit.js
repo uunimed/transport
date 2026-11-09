@@ -40,19 +40,19 @@
     return distances;
   }
 
-  function mapTrips(segments, now = Date.now()) {
+  function mapTrips(segments, now = Date.now(), boardTripIds = new Set()) {
     const trips = new Map();
     for (const segment of segments) {
       const departure = Date.parse(segment.departure);
       const arrival = Date.parse(segment.arrival);
-      if (segment.realTime !== true || segment.cancelled ||
+      if (segment.cancelled ||
           !Number.isFinite(departure) || !Number.isFinite(arrival) ||
           departure > now + MAP_TRIP_WINDOW_MS || arrival < now - MAP_TRIP_WINDOW_MS || departure > arrival) continue;
 
       const points = decodePolyline(segment.polyline);
       const leg = { departure, arrival, points, distances: pathDistances(points), from: segment.from, to: segment.to };
       for (const trip of segment.trips ?? []) {
-        if (!trip.tripId || trip.cancelled) continue;
+        if (!trip.tripId || trip.cancelled || (!segment.realTime && !boardTripIds.has(trip.tripId))) continue;
         if (!trips.has(trip.tripId)) {
           trips.set(trip.tripId, {
             tripId: trip.tripId,
@@ -69,8 +69,8 @@
     return trips;
   }
 
-  function mergeMapTrips(previous, segments, now = Date.now()) {
-    const fresh = mapTrips(segments, now);
+  function mergeMapTrips(previous, segments, now = Date.now(), boardTripIds) {
+    const fresh = mapTrips(segments, now, boardTripIds);
     const cancelled = new Set();
     for (const segment of segments) {
       for (const trip of segment.trips ?? []) {
@@ -255,7 +255,8 @@
       if ((sameStop || noOutgoingHold) && !previous.to?.cancelled && !upcoming?.from?.cancelled &&
           Number.isFinite(previous.to?.lat) && Number.isFinite(previous.to?.lon)) {
         return { lat: previous.to.lat, lng: previous.to.lon, from: previous.to, to: upcoming?.to, stopped: true,
-          stoppedSince: previous.arrival, stoppedUntil: sameStop ? mapLegStart(upcoming, previous) : holdUntil };
+          stoppedSince: previous.arrival, stoppedUntil: sameStop ? mapLegStart(upcoming, previous) : holdUntil,
+          legIndex: index, metersToLegEnd: 0 };
       }
       return null;
     }
@@ -273,8 +274,31 @@
     return {
       lat: fromLat + fraction * (toLat - fromLat),
       lng: fromLng + fraction * (toLng - fromLng),
-      from: leg.from, to: leg.to
+      from: leg.from, to: leg.to, legIndex: index, metersToLegEnd: (length - target) * 111195
     };
+  }
+
+  function nextTripArrival(trip, stopId, now) {
+    return positionLegs(trip).find(leg => leg.to?.stopId === stopId && leg.arrival > now)?.arrival ?? NaN;
+  }
+
+  function tripApproach(trip, stopId, now) {
+    const position = estimatedPosition(trip, now);
+    if (!position || !stopId) return null;
+    const legs = positionLegs(trip);
+    const first = position.legIndex;
+    const target = legs.findIndex((leg, index) => index >= first && leg.to?.stopId === stopId);
+    if (target < 0) return null;
+    let meters = position.metersToLegEnd;
+    for (let index = first + 1; index <= target; index++) {
+      const leg = legs[index];
+      const length = leg.distances.at(-1);
+      if (!length || !leg.from?.stopId || leg.from.stopId !== legs[index - 1].to?.stopId) return null;
+      meters += length * 111195;
+    }
+    return { position, meters, arrival: legs[target].arrival,
+      remaining: Math.max(0, target - first - (position.stopped ? 1 : 0)),
+      nextStop: position.to?.name };
   }
 
   function positionLegs(trip) {
@@ -461,7 +485,7 @@
     }) };
   }
 
-  function positionOnRoute(route, now) {
+  function tripFromRoute(route) {
     let trip = routeTrips.get(route);
     if (!trip) {
       const { stops, points, projected } = route;
@@ -483,11 +507,20 @@
       trip = { legs, line: { product: route.mode } };
       routeTrips.set(route, trip);
     }
+    return trip;
+  }
+
+  function routeArrivalTime(route, stopId, now) {
+    return nextTripArrival(tripFromRoute(route), stopId, now);
+  }
+
+  function positionOnRoute(route, now) {
+    const trip = tripFromRoute(route);
     const first = trip.legs[0];
     const arrival = Date.parse(first?.from.arrival ?? first?.from.scheduledArrival);
     if (first && arrival <= now && now < first.departure && Number.isFinite(first.from.lat) && Number.isFinite(first.from.lon)) {
       return { lat: first.from.lat, lng: first.from.lon, from: first.from, to: first.to,
-        stopped: true, stoppedSince: arrival, stoppedUntil: first.departure };
+        stopped: true, beforeStart: true, stoppedSince: arrival, stoppedUntil: first.departure };
     }
     return estimatedPosition(trip, now);
   }
@@ -579,7 +612,7 @@
     return positions;
   }
 
-  const api = { berlinLocal, berlinInstant, nextBerlinDay, hasLiveTime, positionOnRoute, routeProgress, routeWithOperatorTime, remainingRoute, throughService, mapTrips, mergeMapTrips, vmsDepartures, vmsBoardEvents, applyVmsMapTimes, chemnitzStationId, estimatedPosition, platformLabel, departures, stopStatus, isPlannedDeparture, boardArrival, decodePolyline, vehiclePositions, MAX_POSITION_AGE_MS, MAP_TRIP_WINDOW_MS };
+  const api = { berlinLocal, berlinInstant, nextBerlinDay, hasLiveTime, positionOnRoute, routeProgress, routeArrivalTime, routeWithOperatorTime, remainingRoute, throughService, mapTrips, mergeMapTrips, vmsDepartures, vmsBoardEvents, applyVmsMapTimes, chemnitzStationId, estimatedPosition, tripApproach, nextTripArrival, platformLabel, departures, stopStatus, isPlannedDeparture, boardArrival, decodePolyline, vehiclePositions, MAX_POSITION_AGE_MS, MAP_TRIP_WINDOW_MS };
   if (typeof module === 'object') module.exports = api;
   else root.LiveTransit = api;
 })(globalThis);

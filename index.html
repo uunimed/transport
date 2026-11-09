@@ -1059,6 +1059,8 @@
     const waitingText = 'მოლოდინში';
     const plannedText = 'გეგმიური';
     const unavailableText = 'მონაცემი მიუწვდომელია';
+    const updatingTimeText = 'დრო ზუსტდება';
+    const updatingPositionText = 'მდებარეობა ზუსტდება';
     const connectionText = 'კავშირის ხარვეზი';
     const browserOffline = () => globalThis.navigator?.onLine === false;
     const waitingMarkup = '<span class="waiting-text">მოლოდინში</span>';
@@ -1098,6 +1100,7 @@
       setInterval(() => {
         initClock();
         updateDepartureCountdowns();
+        if (trackedFromBoard && trackedTripId && !trackedRoute) updateTrackedBoardClock();
       }, 1000);
       setInterval(updateLiveMarkers, 250);
       const reportPageIssue = () => {
@@ -1755,9 +1758,26 @@
       return Date.parse(dep.when ?? dep.scheduledWhen);
     }
 
+    function mapArrivalTime(tripId, stopId, now) {
+      const trip = activeTripsCache.get(tripId);
+      if (!stopId || !trip || now - trip.fetchedAt > LiveTransit.MAX_POSITION_AGE_MS) return NaN;
+      return trip.legs.find(leg => leg.to?.stopId === stopId && leg.arrival > now)?.arrival ?? NaN;
+    }
+
+    function boardCountdownTime(dep, now) {
+      if (!dep) return NaN;
+      const departure = boardTime(dep);
+      if (dep.operatorForecast && !dep.arrivalLive && departure > now) return departure;
+      const arrival = LiveTransit.boardArrival(dep);
+      if (arrival > now) return arrival;
+      const mapArrival = mapArrivalTime(dep.tripId, dep.stopId, now);
+      return mapArrival > now ? mapArrival : departure;
+    }
+
     function isUpcomingBoardDeparture(dep, now) {
       const notice = boardPaging?.departed.get(boardDepartureKey(dep));
       if (notice && !dep.cancelled && !dep.skipped) return notice.until > now;
+      if (!dep.cancelled && !dep.skipped && !dep.departureObserved && boardCountdownTime(dep, now) > now) return true;
       if (!boardEventExpired(dep, boardTime(dep), now)) return true;
       const position = mapVehiclePosition(dep.tripId, now);
       return isBoardVehicleAtStop(dep, position, now) || Boolean(LiveTransit.stopStatus(dep, position, now));
@@ -1921,23 +1941,18 @@
         const planned = !vehicleStatus && !position && (dep.scheduledOnly || distant);
         const stopStatus = LiveTransit.stopStatus(dep, position, now);
         const departure = Date.parse(dep.when ?? dep.scheduledWhen);
+        const eta = boardCountdownTime(dep, now);
         const plannedChip = row.querySelector('[data-board-planned]');
         plannedChip.classList.toggle('hidden', !planned);
         row.querySelector('[data-board-status]')?.classList.toggle('hidden', planned);
         row.hidden = !departed && (boardPaging?.departed.has(boardDepartureKey(dep)) ||
-          (!stopStatus && !vehicleStatus && boardEventExpired(dep, departure, now)));
+          (!stopStatus && !vehicleStatus && (dep.departureObserved || !(eta > now)) && boardEventExpired(dep, departure, now)));
         row.parentElement.hidden = row.hidden;
         const isNext = !row.hidden && !departed && !nextFound;
         row.classList.toggle('next-departure', isNext);
         nextFound ||= isNext;
-        const arrival = LiveTransit.boardArrival(dep);
-        const mapTrip = activeTripsCache.get(dep.tripId);
-        const mapArrival = position && now - mapTrip?.fetchedAt <= LiveTransit.MAX_POSITION_AGE_MS
-          ? mapTrip.legs.find(leg => leg.to?.stopId === dep.stopId && leg.arrival > now)?.arrival : NaN;
-        const eta = dep.operatorForecast && !dep.arrivalLive ? departure
-          : arrival > now ? arrival : mapArrival > now ? mapArrival : departure;
         const label = vehicleStatus || stopStatusLabels[stopStatus] || (planned && distant ? boardDate.format(departure)
-          : !(eta > now) ? unavailableText : null);
+          : !(eta > now) ? updatingTimeText : null);
         paintCountdown(row.querySelector('[data-countdown]'), eta, now, label);
       });
       const cards = document.querySelectorAll('#departuresList .departure-card');
@@ -2169,6 +2184,29 @@
       element.classList.toggle('waiting-text', text === waitingText || text.endsWith(': ' + waitingText));
     }
 
+    function trackedBoardEvent() {
+      if (!trackedFromBoard || !trackedBoardDeparture) return null;
+      const key = boardDepartureKey(trackedBoardDeparture);
+      return currentDepartures.find(dep => boardDepartureKey(dep) === key) ?? trackedBoardDeparture;
+    }
+
+    function updateTrackedBoardClock(now = Date.now()) {
+      const dep = trackedBoardEvent();
+      if (!dep || trackingDepartureTimer !== null) return;
+      const position = mapVehiclePosition(dep.tripId, now);
+      const status = updateBoardVehicleStatus(dep, position, now);
+      if (status === 'დაიძრა' && !browserOffline()) {
+        showTrackingDeparture(dep, now);
+        return;
+      }
+      const eta = boardCountdownTime(dep, now);
+      const stopStatus = LiveTransit.stopStatus(dep, position, now);
+      setTrackingText('trackArrivalLabel', dep.operatorForecast && !dep.arrivalLive && eta === boardTime(dep) ? 'დარჩენილია' : 'დრო');
+      paintCountdown(document.getElementById('trackArrival'), eta, now,
+        browserOffline() ? connectionText : dep.cancelled || dep.skipped ? 'გაუქმებულია' :
+          status || stopStatusLabels[stopStatus] || (eta > now ? null : boardConnectionIssue ? connectionText : updatingTimeText));
+    }
+
     function showTrackedStationHold(stop, position, now) {
       const notice = document.getElementById('trackingStationHold');
       if (!stop?.name || !position?.stopped) {
@@ -2216,6 +2254,15 @@
       setTrackingText('trackDirectionTitle', 'იტვირთება');
       setTrackingText('trackTarget', selectedStop?.name ?? waitingText);
       for (const field of ['trackNextStop', 'trackArrival', 'trackDistance', 'trackRemaining']) setTrackingText(field, 'იტვირთება');
+      if (trackedBoardDeparture) {
+        const style = getLineStyle(departure.line.name, departure.line.product);
+        const badge = document.getElementById('trackLineBadge');
+        badge.innerHTML = style.svg + escapeHTML(style.formattedLabel);
+        badge.style.color = style.bg;
+        badge.classList.remove('waiting-text');
+        setTrackingText('trackDirectionTitle', departure.direction || 'იტვირთება');
+        updateTrackedBoardClock();
+      }
       document.getElementById('trackStopsTimeline').replaceChildren();
       await refreshTrackedTrip(true);
     }
@@ -2246,10 +2293,17 @@
         routeOverlayLayerGroup.clearLayers();
         updateMapFocus();
         showTrackedStationHold(null, null, Date.now());
-        setTrackingText('trackDirectionTitle', 'მარშრუტი მიუწვდომელია');
-        for (const field of ['trackNextStop', 'trackArrival', 'trackDistance', 'trackRemaining']) setTrackingText(field, unavailableText);
-        if (trackedConnectionIssue && trackingDepartureTimer === null) {
+        const boardEvent = trackedBoardEvent();
+        setTrackingText('trackDirectionTitle', boardEvent?.direction || 'მარშრუტი მიუწვდომელია');
+        for (const field of ['trackNextStop', 'trackDistance', 'trackRemaining']) {
+          setTrackingText(field, boardEvent ? updatingPositionText : unavailableText);
+        }
+        if (boardEvent) {
+          updateTrackedBoardClock();
+        } else if (trackedConnectionIssue && trackingDepartureTimer === null) {
           paintCountdown(document.getElementById('trackArrival'), NaN, Date.now(), connectionText);
+        } else {
+          setTrackingText('trackArrival', unavailableText);
         }
         document.getElementById('trackStopsTimeline').replaceChildren();
         return;
@@ -2302,8 +2356,7 @@
       const targetStop = stops[target];
       const cancelled = trackedLeg.cancelled || targetStop?.cancelled ||
         (trackedFromBoard && currentDepartures.some(dep => dep.tripId === trackedTripId && (dep.cancelled || (dep.skipped && dep.stopId === trackedTargetId))));
-      const boardDeparture = currentDepartures.filter(dep => dep.tripId === trackedTripId && dep.stopId === trackedTargetId)
-        .sort((a, b) => Math.abs(boardTime(a) - trackedTargetTime) - Math.abs(boardTime(b) - trackedTargetTime))[0];
+      const boardDeparture = trackedBoardEvent();
       const activeLeg = trackedLeg.service.findLast(segment => Date.parse(segment.startTime) <= now) ?? trackedLeg;
       const activeId = activeLeg.tripId;
       const report = vehiclePosition(activeId, now);
@@ -2333,7 +2386,7 @@
       showTrackedStationHold(cancelled || atTarget || connectionIssue ? null : stops[current], position, now);
       const tripStart = Date.parse(trackedLeg.service[0]?.startTime ?? stops[0]?.departure);
       const notStarted = tripStart > now || (!Number.isFinite(tripStart) && boardDeparture?.scheduledOnly && boardTime(boardDeparture) > now);
-      const fallback = !position && !liveVehicleMarkers.has(activeId) && notStarted ? plannedText : unavailableText;
+      const fallback = !position && !liveVehicleMarkers.has(activeId) && notStarted ? plannedText : updatingPositionText;
       setTrackingText('trackNextStop', cancelled ? 'გაუქმებულია' : stops[next]?.name ?? (current >= 0 ? 'ბოლო გაჩერება' : fallback));
       const useBoardArrival = boardDeparture?.arrivalObserved && targetStop?.arrivalTimestampReason !== 'OBSERVED';
       const useBoardDeparture = boardDeparture?.departureObserved && targetStop?.departureTimestampReason !== 'OBSERVED';
@@ -2354,18 +2407,17 @@
         return;
       }
       const stopStatus = targetEvent && LiveTransit.stopStatus(targetEvent, report, now);
-      const trip = activeTripsCache.get(activeId);
-      const mapArrival = now - trip?.fetchedAt <= LiveTransit.MAX_POSITION_AGE_MS
-        ? trip.legs.find(leg => leg.to?.stopId === targetStop?.stopId && leg.arrival > now)?.arrival : NaN;
-      const operatorDeparture = boardDeparture?.operatorForecast && !targetEvent?.arrivalLive
-        ? Date.parse(boardDeparture.when) : NaN;
+      const boardEta = boardCountdownTime(boardDeparture, now);
       const routeArrival = Date.parse(targetEvent?.arrival ?? targetStop?.scheduledArrival);
-      const eta = operatorDeparture > now ? operatorDeparture : routeArrival > now ? routeArrival : mapArrival;
-      setTrackingText('trackArrivalLabel', operatorDeparture > now ? 'დარჩენილია' : 'დრო');
+      const mapArrival = mapArrivalTime(activeId, targetStop?.stopId, now);
+      const useLiveArrival = !boardDeparture?.arrivalLive && LiveTransit.hasLiveTime(targetStop?.arrivalTimestampReason) && routeArrival > now;
+      const eta = useLiveArrival ? routeArrival : boardEta > now ? boardEta : mapArrival > now ? mapArrival : routeArrival;
+      const operatorDeparture = !useLiveArrival && boardDeparture?.operatorForecast && !boardDeparture.arrivalLive && eta === boardTime(boardDeparture);
+      setTrackingText('trackArrivalLabel', operatorDeparture ? 'დარჩენილია' : 'დრო');
       paintCountdown(document.getElementById('trackArrival'), eta, now,
-        connectionIssue ? connectionText : cancelled ? 'გაუქმებულია' : stopStatusLabels[stopStatus] ?? (atTarget ? 'გაჩერებაზეა'
-          : !(eta > now) ? fallback : null));
-      const remaining = position && current >= 0 && target >= 0
+        browserOffline() ? connectionText : cancelled ? 'გაუქმებულია' : stopStatusLabels[stopStatus] ?? (atTarget ? 'გაჩერებაზეა'
+          : !(eta > now) ? connectionIssue ? connectionText : notStarted ? fallback : updatingTimeText : null));
+      const remaining = current >= 0 && target >= 0
         ? stops.slice(current + 1, target).filter(stop => !stop.cancelled).length : null;
       setTrackingText('trackRemaining', cancelled ? 'გაუქმებულია' : remaining === null ? fallback : String(remaining));
       const highlight = moving ? next : current;

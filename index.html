@@ -889,6 +889,7 @@
     const REFRESH_MS = 30_000;
     const MARKER_GAP_MS = 45_000;
     const LONG_STATION_HOLD_MS = 30_000;
+    const APPROACHING_START_MS = 5 * 60_000;
     const STARTUP_STOP_RADIUS_METERS = 500;
     const displayTime = new Intl.DateTimeFormat('de-DE', {
       timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit'
@@ -2171,7 +2172,7 @@
     function updateMapFocus() {
       if (!map || !stopsLayerGroup) return;
       const activeJourney = journey.visible && journey.selected && journey.layer?.getLayers().length;
-      const activeTrip = trackedTripId && (trackedLine || focusedTargetMarker);
+      const activeTrip = trackedTripId && (trackedLine || focusedTargetMarker || trackedLayoverPosition);
       const focus = Boolean(activeJourney || activeTrip);
       if (focus && map.hasLayer(stopsLayerGroup)) map.removeLayer(stopsLayerGroup);
       if (!focus && !map.hasLayer(stopsLayerGroup)) stopsLayerGroup.addTo(map);
@@ -2483,6 +2484,18 @@
     }
 
     function routeLayover(route, position, report, now) {
+      const origin = route.stops.find(stop => !stop.cancelled);
+      const departure = LiveTransit.stopForecastTime(Date.parse(origin?.departure ?? origin?.scheduledDeparture),
+        origin, origin?.departureTimestampReason);
+      if (report?.stopped && report.stopId === origin?.stopId && origin?.departureTimestampReason !== 'OBSERVED') {
+        return report;
+      }
+      if (!report && position?.beforeStart) return position;
+      if (!report && !position && departure > now && departure - now <= APPROACHING_START_MS &&
+          origin?.departureTimestampReason !== 'OBSERVED' && [origin?.lat, origin?.lon].every(Number.isFinite) &&
+          !route.stops.some(stop => stop !== origin && stop.arrivalTimestampReason === 'OBSERVED' && Date.parse(stop.arrival) <= now)) {
+        return { lat: origin.lat, lng: origin.lon, stopped: true, beforeStart: true, from: origin, stoppedUntil: departure };
+      }
       if (position?.stopped && position.from?.lineChange && now < position.stoppedUntil) return position;
       const interchange = report?.stopped && route.stops.find(stop => stop.lineChange && stop.stopId === report.stopId &&
         Date.parse(stop.arrival) <= now && now < Date.parse(stop.departure ?? stop.scheduledDeparture));
@@ -2535,7 +2548,7 @@
         return stops.findIndex(stop => place && (stop === place || place.stopId && stop.stopId === place.stopId));
       };
       const reportedStop = indexOfStop(report);
-      const estimatedFrom = indexOfStop(estimated?.from);
+      const estimatedFrom = indexOfStop(estimated?.from ?? layover?.from);
       const estimatedTo = indexOfStop(estimated?.to);
       const previousStop = estimatedFrom >= 0 ? estimatedFrom
         : estimatedTo >= 0 && estimated && !estimated.stopped
@@ -2563,7 +2576,7 @@
       showTrackedStationHold(cancelled || planned || atTarget || connectionIssue || layover ? null : stops[reportedStop], report, now);
       document.getElementById('trackedStopSummary').classList.toggle('hidden', !trackedFromBoard && !layover);
       setTrackingNotice(layover ? 'layover' : '', layover ? 'უცდის ახალ მარშრუტს' : '');
-      setTrackingText('trackNextStop', cancelled ? 'გაუქმებულია' : planned ? plannedText :
+      setTrackingText('trackNextStop', cancelled ? 'გაუქმებულია' : planned && !layover ? plannedText :
         stops[next]?.name ?? approach?.nextStop ?? (current >= 0 ? 'ბოლო გაჩერება' : fallback));
       const useBoardArrival = boardDeparture?.arrivalObserved && targetStop?.arrivalTimestampReason !== 'OBSERVED';
       const useBoardDeparture = boardDeparture?.departureObserved && targetStop?.departureTimestampReason !== 'OBSERVED';

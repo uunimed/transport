@@ -2,6 +2,7 @@
   const MAX_POSITION_AGE_MS = 90_000;
   const MAP_TRIP_WINDOW_MS = 5 * 60_000;
   const FALLBACK_DWELL_MS = 12_000;
+  const HUB_DWELL_MS = 30_000;
   const modeledSpeedKmh = { TRAM: 65, BUS: 75, SUBURBAN: 120, REGIONAL_RAIL: 180 };
   const modeledLegs = new WeakMap();
   const routeTrips = new WeakMap();
@@ -43,8 +44,8 @@
   function mapTrips(segments, now = Date.now(), boardTripIds = new Set()) {
     const trips = new Map();
     for (const segment of segments) {
-      const departure = Date.parse(segment.departure);
-      const arrival = Date.parse(segment.arrival);
+      const departure = stopForecastTime(Date.parse(segment.departure), segment.from, segment.from?.departureTimestampReason);
+      const arrival = stopForecastTime(Date.parse(segment.arrival), segment.to, segment.to?.arrivalTimestampReason);
       if (segment.cancelled ||
           !Number.isFinite(departure) || !Number.isFinite(arrival) ||
           departure > now + MAP_TRIP_WINDOW_MS || arrival < now - MAP_TRIP_WINDOW_MS || departure > arrival) continue;
@@ -93,6 +94,31 @@
     .replace(/^Chemnitz,\s*/i, '').replace(/,\s*(?:Bahnhof|Bf\.?)\s*$/i, '').replace(/\bHbf\b/gi, 'Hauptbahnhof'));
   const operatorTime = value => Number(String(value ?? '').match(/^\/Date\((\d+)/)?.[1] ?? NaN);
   const chemnitzStationId = value => String(value ?? '').match(/(?:^|_)de:14511:(\d+)(?=[:_]|$)/i)?.[1];
+  const fallbackDwell = stop => /zentralhaltestelle|hauptbahnhof/i.test(stop?.name ?? stop?.stopName ?? '') ? HUB_DWELL_MS : FALLBACK_DWELL_MS;
+
+  function operatorEstimate(time) {
+    // A minute-only forecast locates the event within the minute, not at its first second.
+    return Number.isFinite(time) && time % 60_000 === 0 ? time + 30_000 : time;
+  }
+
+  function stopForecastTime(time, stop, reason) {
+    return chemnitzStationId(stop?.stopId) && (reason === 'PREDICTED' || reason === 'PROPAGATED')
+      ? operatorEstimate(time) : time;
+  }
+
+  function stopWindow(arrival, departure, stop) {
+    return { arrival, departure: departure > arrival ? departure : arrival + fallbackDwell(stop) };
+  }
+
+  function interpolatedDelay(anchors, time) {
+    const next = anchors.findIndex(row => row.scheduled >= time);
+    const later = anchors[next];
+    const earlier = anchors[next < 0 ? anchors.length - 1 : next - 1];
+    const delay = row => operatorEstimate(row.predicted) - row.scheduled;
+    if (!earlier || !later) return delay(earlier ?? later);
+    return delay(earlier) + (delay(later) - delay(earlier)) *
+      (time - earlier.scheduled) / (later.scheduled - earlier.scheduled);
+  }
 
   function vmsDepartures(data) {
     if (data?.Status?.Code !== 'Ok' || !Array.isArray(data.Departures)) return [];
@@ -205,6 +231,8 @@
     }
     for (const [id, correction] of transitous) corrections.set(id, correction);
     if (!corrections.size) return segments;
+    const anchorsByTrip = new Map([...stationCorrections].map(([id, anchors]) =>
+      [id, [...anchors.values()].sort((a, b) => a.scheduled - b.scheduled)]));
     return segments.flatMap(segment => {
       if (segment.cancelled || !localModes.has(segment.mode)) return [segment];
       const unchanged = [], adjusted = [];
@@ -212,29 +240,34 @@
         const departure = Date.parse(segment.scheduledDeparture ?? segment.departure);
         const arrival = Date.parse(segment.scheduledArrival ?? segment.arrival);
         const direct = stationCorrections.get(trip.tripId)?.get(departure);
+        const anchors = anchorsByTrip.get(trip.tripId);
         const correction = direct ?? (stationCorrections.has(trip.tripId) || !segment.realTime ? corrections.get(trip.tripId) : null);
         if (!correction || trip.cancelled || !Number.isFinite(departure) || !Number.isFinite(arrival)) {
           unchanged.push(trip);
           continue;
         }
         const delay = correction.predicted - correction.scheduled;
+        const departureDelay = anchors ? interpolatedDelay(anchors, departure) : delay;
+        const arrivalDelay = anchors ? interpolatedDelay(anchors, arrival) : delay;
         adjusted.push({ ...segment, trips: [trip], realTime: true,
-          departure: segment.from?.departureTimestampReason === 'OBSERVED' ? segment.departure : new Date(departure + delay).toISOString(),
-          arrival: segment.to?.arrivalTimestampReason === 'OBSERVED' ? segment.arrival : new Date(arrival + delay).toISOString() });
+          departure: segment.from?.departureTimestampReason === 'OBSERVED' || !direct && segment.realTime
+            ? segment.departure : new Date(departure + departureDelay).toISOString(),
+          arrival: hasLiveTime(segment.to?.arrivalTimestampReason) && Number.isFinite(Date.parse(segment.arrival))
+            ? segment.arrival : new Date(arrival + arrivalDelay).toISOString() });
       }
       return unchanged.length ? [{ ...segment, trips: unchanged }, ...adjusted] : adjusted;
     });
   }
 
-  function dwellEnd(arrival, departure, nextArrival, observedDeparture) {
+  function dwellEnd(arrival, departure, nextArrival, observedDeparture, stop) {
     if (observedDeparture || departure !== arrival || !(nextArrival > departure)) return departure;
-    return departure + Math.min(FALLBACK_DWELL_MS, (nextArrival - departure) / 4);
+    return departure + Math.min(fallbackDwell(stop), (nextArrival - departure) / 4);
   }
 
   function mapLegStart(leg, incoming) {
     if (!leg.from?.stopId || leg.from.stopId !== incoming?.to?.stopId ||
         leg.from.cancelled || incoming.to.cancelled) return leg.departure;
-    return dwellEnd(incoming.arrival, leg.departure, leg.arrival, leg.from.departureTimestampReason === 'OBSERVED');
+    return dwellEnd(incoming.arrival, leg.departure, leg.arrival, leg.from.departureTimestampReason === 'OBSERVED', leg.from);
   }
 
   function estimatedPosition(trip, now = Date.now()) {
@@ -250,7 +283,7 @@
         : previous.to?.name && previous.to.name === upcoming.from?.name);
       const knownDeparture = Date.parse(previous.to?.departure ?? previous.to?.scheduledDeparture);
       const holdUntil = knownDeparture > previous.arrival ? knownDeparture
-        : previous.to?.departureTimestampReason === 'OBSERVED' ? previous.arrival : previous.arrival + FALLBACK_DWELL_MS;
+        : previous.to?.departureTimestampReason === 'OBSERVED' ? previous.arrival : previous.arrival + fallbackDwell(previous.to);
       const noOutgoingHold = !upcoming && now < holdUntil;
       if ((sameStop || noOutgoingHold) && !previous.to?.cancelled && !upcoming?.from?.cancelled &&
           Number.isFinite(previous.to?.lat) && Number.isFinite(previous.to?.lon)) {
@@ -278,8 +311,14 @@
     };
   }
 
-  function nextTripArrival(trip, stopId, now) {
-    return positionLegs(trip).find(leg => leg.to?.stopId === stopId && leg.arrival > now)?.arrival ?? NaN;
+  function tripStopWindow(trip, stopId, now) {
+    const legs = positionLegs(trip);
+    const index = legs.findIndex(leg => leg.to?.stopId === stopId && leg.arrival >= now - MAX_POSITION_AGE_MS);
+    if (index < 0) return null;
+    const incoming = legs[index], outgoing = legs[index + 1];
+    const departure = outgoing?.from?.stopId === stopId ? mapLegStart(outgoing, incoming)
+      : Date.parse(incoming.to?.departure ?? incoming.to?.scheduledDeparture);
+    return stopWindow(incoming.arrival, departure, incoming.to);
   }
 
   function tripApproach(trip, stopId, now) {
@@ -318,7 +357,7 @@
         const meters = (leg.distances.at(-1) ?? 0) * 111195;
         const duration = meters / (speed / 3.6) * 1000;
         if (contiguous && !leg.from.cancelled && !previous.to.cancelled) {
-          adjusted.departure = dwellEnd(previous.arrival, departure, Math.max(leg.arrival, departure + duration), observedDeparture);
+          adjusted.departure = dwellEnd(previous.arrival, departure, Math.max(leg.arrival, departure + duration), observedDeparture, leg.from);
         }
         adjusted.arrival = Math.max(leg.arrival, adjusted.departure + duration);
       }
@@ -373,6 +412,7 @@
         arrivalOnly,
         arrival: hasLiveTime(place.arrivalTimestampReason) ? place.arrival : (place.scheduledArrival ?? place.arrival),
         scheduledArrival: place.scheduledArrival,
+        stopName: place.name,
         departure: place.departure,
         arrivalLive: hasLiveTime(place.arrivalTimestampReason),
         arrivalObserved: place.arrivalTimestampReason === 'OBSERVED',
@@ -471,13 +511,14 @@
   function routeWithOperatorTime(route, event) {
     const target = route.stops[route.target];
     if (!event?.operatorForecast || !target || target.departureTimestampReason === 'OBSERVED') return route;
-    const delta = Date.parse(event.when) - Date.parse(target.departure ?? target.scheduledDeparture);
+    const delta = operatorEstimate(Date.parse(event.when)) - Date.parse(target.departure ?? target.scheduledDeparture);
     if (!Number.isFinite(delta) || delta === 0) return route;
-    return { ...route, stops: route.stops.map(stop => {
+    return { ...route, stops: route.stops.map((stop, index) => {
       const adjusted = { ...stop };
       for (const [time, scheduled] of [['arrival', 'scheduledArrival'], ['departure', 'scheduledDeparture']]) {
         const value = Date.parse(stop[time] ?? stop[scheduled]);
-        if (stop[time + 'TimestampReason'] !== 'OBSERVED' && Number.isFinite(value)) {
+        const reason = stop[time + 'TimestampReason'];
+        if ((!hasLiveTime(reason) || index === route.target && time === 'departure' && reason !== 'OBSERVED') && Number.isFinite(value)) {
           adjusted[time] = new Date(value + delta).toISOString();
         }
       }
@@ -495,8 +536,8 @@
         if (stop.cancelled) return;
         if (previous >= 0) {
           const from = stops[previous];
-          const departure = Date.parse(from.departure ?? from.scheduledDeparture);
-          const arrival = Date.parse(stop.arrival ?? stop.scheduledArrival);
+          const departure = stopForecastTime(Date.parse(from.departure ?? from.scheduledDeparture), from, from.departureTimestampReason);
+          const arrival = stopForecastTime(Date.parse(stop.arrival ?? stop.scheduledArrival), stop, stop.arrivalTimestampReason);
           if (Number.isFinite(departure) && Number.isFinite(arrival)) {
             const section = points.slice(projected[previous], projected[index] + 1);
             legs.push({ departure, arrival, from, to: stop, points: section, distances: pathDistances(section) });
@@ -510,8 +551,8 @@
     return trip;
   }
 
-  function routeArrivalTime(route, stopId, now) {
-    return nextTripArrival(tripFromRoute(route), stopId, now);
+  function routeStopWindow(route, stopId, now) {
+    return tripStopWindow(tripFromRoute(route), stopId, now);
   }
 
   function positionOnRoute(route, now) {
@@ -612,7 +653,7 @@
     return positions;
   }
 
-  const api = { berlinLocal, berlinInstant, nextBerlinDay, hasLiveTime, positionOnRoute, routeProgress, routeArrivalTime, routeWithOperatorTime, remainingRoute, throughService, mapTrips, mergeMapTrips, vmsDepartures, vmsBoardEvents, applyVmsMapTimes, chemnitzStationId, estimatedPosition, tripApproach, nextTripArrival, platformLabel, departures, stopStatus, isPlannedDeparture, boardArrival, decodePolyline, vehiclePositions, MAX_POSITION_AGE_MS, MAP_TRIP_WINDOW_MS };
+  const api = { berlinLocal, berlinInstant, nextBerlinDay, hasLiveTime, operatorEstimate, stopForecastTime, stopWindow, positionOnRoute, routeProgress, routeStopWindow, routeWithOperatorTime, remainingRoute, throughService, mapTrips, mergeMapTrips, vmsDepartures, vmsBoardEvents, applyVmsMapTimes, chemnitzStationId, estimatedPosition, tripApproach, tripStopWindow, platformLabel, departures, stopStatus, isPlannedDeparture, boardArrival, decodePolyline, vehiclePositions, MAX_POSITION_AGE_MS, MAP_TRIP_WINDOW_MS };
   if (typeof module === 'object') module.exports = api;
   else root.LiveTransit = api;
 })(globalThis);

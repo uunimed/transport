@@ -233,7 +233,7 @@
       box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
     }
     .departure-card {
-      display: grid; grid-template-columns: minmax(5.4rem, auto) 1fr auto; gap: .65rem;
+      display: grid; grid-template-columns: minmax(5.4rem, auto) minmax(0, 1fr) auto; gap: .65rem;
       align-items: center; width: 100%; text-align: left; padding: .9rem .75rem;
       border-bottom: 1px solid var(--ui-border); background: transparent; color: var(--ui-ink);
     }
@@ -256,8 +256,7 @@
     #boardRefreshButton[data-state="success"] { color: var(--ui-positive) !important; border-color: currentColor; }
     #boardRefreshButton[data-state="error"] { color: #ef4444 !important; border-color: currentColor; }
     .connection-countdown { position: relative; display: inline-block; overflow: hidden; vertical-align: bottom; min-height: 1.45em; }
-    .departure-count .connection-countdown { width: 7rem; }
-    .connection-countdown > span {
+    .connection-countdown:not([data-kind="departure"]) > span {
       position: absolute; left: 100%; top: 50%; white-space: nowrap;
       animation: connection-scroll 9s linear infinite;
     }
@@ -269,9 +268,9 @@
     .tracking-summary.tracking-offline > div:not(#trackConnection) { display: none; }
     #trackConnection { padding-inline: 0; min-height: 2.35rem; font-weight: 800; }
     #trackConnection[hidden] { display: none; }
-    #trackConnection > span { animation-duration: 13s; }
+    #trackConnection:not([data-kind="departure"]) > span { animation-duration: 13s; }
     #trackConnection[data-kind="layover"] { color: var(--ui-layover); }
-    #trackConnection[data-kind="departure"] > span { animation: none; left: 50%; transform: translate(-50%, -50%); }
+    #trackConnection[data-kind="departure"]:not([data-overflow]) { text-align: center; }
     .approximate-clock { color: #fb7185 !important; }
     html.light .approximate-clock { color: #b4233d !important; }
     :root { --ui-layover: #d8b4fe; }
@@ -281,24 +280,36 @@
     html.light :is(.event-time.late, .connection-countdown) { color: #b4233d; }
     .route-step-meta del { color: var(--ui-muted); margin-inline-start: .35rem; }
     @media (prefers-reduced-motion: reduce) {
-      .connection-countdown > span { animation: none; left: 50%; transform: translate(-50%, -50%); }
+      .connection-countdown:not([data-kind="departure"]) > span { animation: none; left: 50%; transform: translate(-50%, -50%); }
       .stopped-clock, .approximate-clock, #trackConnection[data-kind="departure"], #boardRefreshButton[data-state="loading"] svg { animation: none; }
     }
     .departure-line { display: flex; align-items: center; gap: .35rem; white-space: nowrap; font-weight: 800; }
     .departure-main { min-width: 0; }
-    .departure-direction { font-weight: 800; display: block; overflow-wrap: anywhere; }
+    .departure-direction { font-weight: 800; }
+    [data-scroll-label] { display: block; min-width: 0; max-width: 100%; overflow: hidden; white-space: nowrap; text-align: start; }
+    [data-scroll-label] > span { display: inline-block; width: max-content; white-space: nowrap; }
+    [data-scroll-label].text-right:not([data-overflow]) { text-align: right; }
+    [data-overflow] > span { animation: overflow-label-scroll var(--scroll-duration) linear infinite; }
+    @keyframes overflow-label-scroll {
+      0%, 15%, 100% { transform: translateX(0); }
+      50%, 65% { transform: translateX(var(--scroll-offset)); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      [data-overflow] { text-overflow: ellipsis; }
+      [data-overflow] > span { animation: none; display: inline; }
+    }
     .departure-meta { display: flex; align-items: center; gap: .3rem; flex-wrap: wrap; font-size: .72rem; margin-top: .35rem; }
     .departure-chip { color: var(--ui-muted); font-weight: 700; }
     .departure-chip::before { content: '·'; margin-inline: .15rem .35rem; color: var(--ui-muted); }
     .departure-chip.good { color: #34d399; }
     .departure-chip.warn { color: #fbbf24; }
     .departure-chip.error { color: #fda4af; }
-    .departure-count { text-align: right; font-weight: 800; white-space: nowrap; }
+    .departure-count { width: clamp(5rem, 24vw, 7rem); text-align: right; font-weight: 800; white-space: nowrap; }
     .departure-count small { display: block; color: #60a5fa; font-size: .65rem; margin-top: .3rem; }
     .departure-count .on-map { color: #34d399; }
     html.light .departure-count small { color: #1d4ed8; }
     html.light .departure-count .on-map { color: #047857; }
-    .tracking-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: .4rem; }
+    .tracking-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .4rem; }
     .tracking-summary > div { border: 1px solid #475569; border-radius: .65rem; padding: .3rem .3rem; text-align: center; }
     .tracking-summary dt { font-size: .65rem; opacity: .85; }
     .tracking-summary dd { font-size: .9rem; font-weight: 800; margin-top: .1rem; }
@@ -732,22 +743,22 @@
           <div class="p-4 border-b border-slate-800 bg-slate-900/90 space-y-3">
             <div>
               <h3 class="text-[11px] font-bold tracking-wider text-emerald-400">დეტალურად</h3>
-              <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <div class="mt-1 flex items-center gap-x-3">
                 <div id="trackLineBadge" class="departure-line text-xs shrink-0"></div>
-                <p id="trackDirectionTitle" class="min-w-0 text-sm sm:text-base font-extrabold text-white leading-tight"></p>
+                <p id="trackDirectionTitle" class="flex-1 text-sm sm:text-base font-extrabold text-white leading-tight" data-scroll-label><span></span></p>
               </div>
             </div>
 
             <div id="trackedStopSummary" class="space-y-3">
             <dl id="trackingProgressSummary" class="tracking-summary">
-              <div><dt id="trackArrivalLabel">დრო</dt><dd id="trackArrival"><span class="waiting-text">მოლოდინში</span></dd></div>
+              <div><dt id="trackArrivalLabel">დრო</dt><dd id="trackArrival" class="waiting-text" data-scroll-label><span>მოლოდინში</span></dd></div>
               <div><dt>მანძილი</dt><dd id="trackDistance"><span class="waiting-text">მოლოდინში</span></dd></div>
               <div><dt>გაჩერება</dt><dd id="trackRemaining"><span class="waiting-text">მოლოდინში</span></dd></div>
-              <div id="trackConnection" class="connection-countdown" role="status" hidden><span>კავშირის ხარვეზი</span></div>
+              <div id="trackConnection" class="connection-countdown" role="status" data-scroll-label hidden><span>კავშირის ხარვეზი</span></div>
             </dl>
             <p id="trackingStationHold" class="hidden text-sm font-bold text-blue-400"></p>
             <dl class="text-xs space-y-2">
-              <div class="flex justify-between gap-2"><dt class="text-slate-400">შემდეგი გაჩერება</dt><dd id="trackNextStop" class="text-right font-bold"><span class="waiting-text">მოლოდინში</span></dd></div>
+              <div class="flex justify-between gap-2"><dt class="shrink-0 text-slate-400">შემდეგი გაჩერება</dt><dd id="trackNextStop" class="flex-1 text-right font-bold waiting-text" data-scroll-label><span>მოლოდინში</span></dd></div>
             </dl>
             </div>
           </div>
@@ -1097,6 +1108,7 @@
      * 4. INITIALIZATION & GPS STARTUP
      *************************************************************************/
     window.onload = async function () {
+      observeScrollLabels(document);
       initClock();
       initMap();
       try {
@@ -1984,6 +1996,46 @@
       arrived: 'გაჩერებაზეა'
     };
 
+    function syncScrollLabel(element) {
+      const content = element.firstElementChild;
+      const width = element.clientWidth;
+      const isConnectionBanner = element.classList.contains('connection-countdown') && element.dataset.kind !== 'departure';
+      const overflow = width && !isConnectionBanner ? content.offsetWidth - width : 0;
+      element.toggleAttribute('data-overflow', overflow > 1);
+      if (overflow > 1) {
+        element.style.setProperty('--scroll-offset', `-${overflow}px`);
+        element.style.setProperty('--scroll-duration', `${Math.max(7, overflow / 9 + 2)}s`);
+        element.title = content.textContent;
+      } else {
+        element.removeAttribute('title');
+      }
+    }
+
+    const scrollLabelObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(entries => {
+      const labels = new Set(entries.map(entry => entry.target.closest('[data-scroll-label]')));
+      for (const label of labels) if (label?.isConnected) syncScrollLabel(label);
+    }) : null;
+
+    function observeScrollLabels(root, observe = true) {
+      for (const label of root.querySelectorAll('[data-scroll-label]')) {
+        if (observe) {
+          scrollLabelObserver?.observe(label);
+          scrollLabelObserver?.observe(label.firstElementChild);
+          if (!scrollLabelObserver) syncScrollLabel(label);
+        } else {
+          scrollLabelObserver?.unobserve(label);
+          scrollLabelObserver?.unobserve(label.firstElementChild);
+        }
+      }
+    }
+
+    function setScrollLabelText(element, text) {
+      if (element.firstElementChild.textContent === text) return;
+      element.firstElementChild.textContent = text;
+      if (element.hasAttribute('data-overflow')) element.title = text;
+      if (!scrollLabelObserver) syncScrollLabel(element);
+    }
+
     function paintCountdown(element, time, now, label = null) {
       const text = label ?? (Number.isFinite(time) && time <= now ? '0 წთ 00 წმ' : formatCountdown(time, now));
       const connectionIssue = text === connectionText;
@@ -1994,6 +2046,10 @@
       element.classList.toggle('stopped-clock', text === 'გაჩერებაზეა');
       element.classList.toggle('departed-clock', text === departedText);
       element.classList.toggle('approximate-clock', text === approxAtStop || text === approxDeparted);
+      if (element.dataset?.scrollLabel !== undefined) {
+        setScrollLabelText(element, text);
+        return;
+      }
       if (connectionIssue) {
         if (!element.firstElementChild || element.textContent !== connectionText) element.innerHTML = '<span>კავშირის ხარვეზი</span>';
         return;
@@ -2060,15 +2116,15 @@
         const tint = cancelled ? '' : change > 0 ? ' timing-late' : change < 0 ? ' timing-early' : '';
         const delay = Math.abs(change) < 60 ? `${Math.round(Math.abs(change))} წმ` : `${Math.round(Math.abs(change) / 60)} წთ`;
         const status = dep.cancelled ? 'გაუქმებულია' : dep.skipped ? 'გაჩერებას გამოტოვებს' :
-          !Number.isFinite(change) ? dep.arrivalOnly ? 'მოსვლა' : '' : change > 0 ? `+${delay} დაგვიანება` :
-          change < 0 ? `${delay} ადრე` : 'დროულად';
+          !Number.isFinite(change) ? dep.arrivalOnly ? 'მოსვლა' : '' : change > 0 ? `+${delay}` :
+          change < 0 ? `−${delay}` : 'დროულად';
         return `
           <div>
             <button type="button" ${dep.operatorOnly ? 'disabled' : `onclick="openVehicleInSidebar('${tripClick(dep.tripId)}', true, ${currentDepartures.indexOf(dep)})"`}
               class="departure-card${tint}" ${cancelled ? '' : `data-board-trip="${currentDepartures.indexOf(dep)}"`}>
               <span class="departure-line" style="--line-color:${style.bg}; color:var(--line-color)">${style.svg} ${escapeHTML(style.formattedLabel)}</span>
               <span class="departure-main">
-                <span class="departure-direction">${escapeHTML(dep.direction)}</span>
+                <span class="departure-direction" data-scroll-label><span>${escapeHTML(dep.direction)}</span></span>
                 <span class="departure-meta">
                   ${!cancelled && Number.isFinite(time) ? eventTimeMarkup(time, planned) : ''}
                   ${status ? `<span data-board-status class="departure-chip ${cancelled ? 'error' : change ? 'warn' : 'good'}">${status}</span>` : ''}
@@ -2077,7 +2133,7 @@
                 </span>
               </span>
               <span class="departure-count" ${cancelled ? 'hidden' : ''}>
-                <span data-countdown class="inline-block max-w-28 whitespace-normal">${waitingMarkup}</span><small>${dep.operatorForecast && !dep.arrivalLive ? 'დარჩენილია' : dep.operatorOnly ? 'მხოლოდ ტაბლო' : 'რუკაზე ნახვა'}</small>
+                <span class="text-right waiting-text" data-countdown data-scroll-label><span>${waitingText}</span></span><small>${dep.operatorForecast && !dep.arrivalLive ? 'დარჩენილია' : dep.operatorOnly ? 'მხოლოდ ტაბლო' : 'რუკაზე ნახვა'}</small>
               </span>
             </button>
             ${renderAlerts(dep.alerts)}
@@ -2088,7 +2144,9 @@
           ${boardPaging?.error ? '<p class="mb-2 text-xs text-slate-400" role="status">მომდევნო რეისები ვერ ჩაიტვირთა</p>' : ''}
           <button type="button" onclick="loadMoreBoardDepartures()" ${boardPaging?.loading ? 'disabled aria-busy="true"' : ''}
             class="px-4 py-2 text-sm font-bold text-blue-400 hover:underline disabled:opacity-60">${boardPaging?.loading ? 'იტვირთება' : 'მეტის ჩვენება'}</button></div>` : '';
+      observeScrollLabels(listEl, false);
       listEl.innerHTML = renderAlerts(stopAlerts) + (departuresNote ? `<p class="px-2 py-1 text-xs font-semibold text-slate-300">${departuresNote}</p>` : '') + rows + more;
+      observeScrollLabels(listEl);
       updateDepartureCountdowns();
     }
 
@@ -2266,7 +2324,8 @@
      *************************************************************************/
     function setTrackingText(id, text) {
       const element = document.getElementById(id);
-      if (element.textContent !== text || element.firstElementChild) element.textContent = text;
+      if (element.dataset?.scrollLabel !== undefined) setScrollLabelText(element, text);
+      else if (element.textContent !== text || element.firstElementChild) element.textContent = text;
       element.classList.toggle('waiting-text', text === waitingText || text.endsWith(': ' + waitingText));
     }
 
@@ -2276,7 +2335,7 @@
       const notice = document.getElementById('trackConnection');
       notice.hidden = !kind;
       notice.dataset.kind = kind;
-      if (notice.firstElementChild.textContent !== text) notice.firstElementChild.textContent = text;
+      setScrollLabelText(notice, text);
     }
 
     function setTrackingOffline(offline) {
